@@ -102,6 +102,8 @@ a.linkbtn{display:inline}
 .msg .bubble{padding:8px 12px;border-radius:16px;background:var(--bg);border:1px solid var(--line);word-break:break-word;line-height:1.5;font-size:14px}
 .msg.mine{align-self:flex-end;align-items:flex-end}
 .msg.mine .bubble{background:var(--coral);color:#fff;border-color:transparent}
+.sys.warn{background:color-mix(in srgb,var(--coral) 14%,transparent);color:var(--ink);font-weight:700}
+.sys.ok{background:color-mix(in srgb,var(--teal) 14%,transparent);color:var(--ink);font-weight:700}
 .msg .readmark{color:var(--coral);font-weight:700;margin-right:2px}
 .msg .t{font-size:10px;color:var(--muted);margin:2px 4px}
 .sys{align-self:center;font-size:11px;color:var(--muted);text-align:center;padding:2px 10px;background:var(--bg);border-radius:99px}
@@ -410,6 +412,7 @@ function onMsg(m){
       partner = m.partner; V=null;
       if(inviteCode) clearInvite();
       if(!m.resumed) sfx("match");
+      setPartnerAway(false);
       if(!m.resumed){ resetReads(); $("log").textContent=""; sys("マッチングしました！まずは「よろしく」から始めよう 👋"); sys("連絡先の交換・出会い目的の利用は禁止です"); }
       else sys("再接続しました");
       renderTop(); renderStage(); show("playScr"); return;
@@ -428,16 +431,30 @@ function onMsg(m){
     case "read": if(Number.isInteger(m.upTo)) markReadUpTo(m.upTo); return;
     case "chat_rejected": sys("🚫 "+m.text); sfx("bad"); return;
     case "stamp": showStamp(m.id, m.from==="me"); return;
-    case "partner_away": sys(`${partner?partner.name:"相手"} さんの接続が不安定です…少し待ってね`); $("pSub").textContent="接続待ち…"; return;
-    case "partner_back": sys(`${partner?partner.name:"相手"} さんが戻ってきました`); renderTop(); return;
+    case "partner_away": {
+      const nm = partner?partner.name:"相手", sec = m.graceSec || 20;
+      sys(`⚠️ ${nm}さんとの接続が切れました。${sec}秒以内に戻ってくれば、このまま続けられます`, "warn");
+      setPartnerAway(true, sec); sfx("bad"); return;
+    }
+    case "partner_back":
+      sys(`✅ ${partner?partner.name:"相手"}さんが戻ってきました`, "ok");
+      setPartnerAway(false); sfx("good"); return;
     case "partner_left": {
+      setPartnerAway(false);
       const nm = partner ? partner.name : "相手";
-      const txt = m.reason==="disconnected" ? `${esc(nm)} さんとの接続が切れました` : `${esc(nm)} さんが退出しました`;
-      openDialog(`<div class="big">👋</div><div class="h">${txt}</div><div class="sub">一緒に遊んでくれてありがとう。</div>
-        <button id="dNext">新しい相手を探す</button><button class="ghost" id="dHome">トップへ</button>`);
-      $("dNext").onclick=()=>{ closeDialog(); send({t:"search"}); };
-      $("dHome").onclick=()=>{ closeDialog(); show("intro"); };
-      partner=null; return;
+      const disc = m.reason==="disconnected";
+      sys(disc ? `❌ ${nm}さんとの接続が戻らなかったため、ゲームを終了しました` : `👋 ${nm}さんが退出しました`, disc ? "warn" : "");
+      partner=null;
+      // leave the notice readable in the chat for a moment before the dialog covers it
+      setTimeout(()=>{
+        if(screen!=="playScr" || partner) return;
+        openDialog(`<div class="big">${disc?"📡":"👋"}</div><div class="h">${esc(nm)}さん${disc?"との接続が切れました":"が退出しました"}</div>
+          <div class="sub">${disc?"電波が悪くなったのかもしれません。":""}一緒に遊んでくれてありがとう。</div>
+          <button id="dNext">新しい相手を探す</button><button class="ghost" id="dHome">トップへ</button>`);
+        $("dNext").onclick=()=>{ closeDialog(); send({t:"search"}); };
+        $("dHome").onclick=()=>{ closeDialog(); show("intro"); };
+      }, 1500);
+      return;
     }
     case "left":
       if(m.reported) toast("通報を受け付けました。ご協力ありがとうございます。");
@@ -927,7 +944,17 @@ function markReadUpTo(n){
 }
 document.addEventListener("visibilitychange", reportRead);
 window.addEventListener("focus", reportRead);
-function sys(text){ const el=document.createElement("div"); el.className="sys"; el.textContent=text; $("log").appendChild(el); $("log").scrollTop=$("log").scrollHeight; }
+function sys(text, kind){ const el=document.createElement("div"); el.className="sys"+(kind?" "+kind:""); el.textContent=text; $("log").appendChild(el); $("log").scrollTop=$("log").scrollHeight; }
+let awayTimer=null;
+function setPartnerAway(on, sec){
+  clearInterval(awayTimer); awayTimer=null;
+  $("pAv").style.opacity = on ? ".35" : "";
+  if(!on){ renderTop(); return; }
+  let left = sec;
+  const paint=()=>{ $("pSub").textContent = `📡 接続待ち… あと${left}秒`; };
+  paint();
+  awayTimer=setInterval(()=>{ left=Math.max(0,left-1); paint(); if(!left){ clearInterval(awayTimer); $("pSub").textContent="📡 接続待ち…"; } }, 1000);
+}
 function sendChat(text){ text=String(text).trim().slice(0,200); if(text) send({t:"chat", text, id:uid()}); }
 $("compose").addEventListener("submit", e=>{ e.preventDefault(); sendChat($("msgIn").value); $("msgIn").value=""; });
 QUICK.forEach(q=>{ const b=document.createElement("button"); b.type="button"; b.textContent=q; b.onclick=()=>sendChat(q); $("quick").appendChild(b); });

@@ -90,7 +90,7 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     const { A, B } = await joinAndMatch('10.0.4.1', '10.0.4.2');
     const token = A.hello.token;
     A.ws.close();
-    await B.next('partner_away');
+    assert.strictEqual((await B.next('partner_away')).graceSec, 20);
     const A2 = await client('10.0.4.1', token);
     const h = await A2.next('hello'); assert.strictEqual(h.resumed, true);
     const m = await A2.next('matched'); assert.strictEqual(m.resumed, true);

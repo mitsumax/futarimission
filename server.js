@@ -43,7 +43,7 @@ const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data
 
 // ---- tunables ----
 const RECONNECT_GRACE_MS = 20_000;   // keep a pair alive while a phone briefly drops
-const HEARTBEAT_MS = 25_000;
+const HEARTBEAT_MS = 10_000;   // a phone that vanished without closing is noticed within ~20s
 const MAX_CONN_PER_IP = Number(process.env.MAX_CONN_PER_IP) || 30; // mobile carriers share IPs (CGNAT)
 const CHAT_BURST = 5, CHAT_WINDOW_MS = 6_000;  // max 5 messages per 6s
 const ACT_BURST = 20, ACT_WINDOW_MS = 4_000;
@@ -364,7 +364,7 @@ function attach(ws, req, token) {
     const c = (connsPerIp.get(ip) || 1) - 1; if (c <= 0) connsPerIp.delete(ip); else connsPerIp.set(ip, c);
     if (p.ws !== ws) return; // replaced by a newer connection
     queue.delete(p);
-    if (p.state === 'paired' && p.pair) send(partnerOf(p), { t: 'partner_away' });
+    if (p.state === 'paired' && p.pair) send(partnerOf(p), { t: 'partner_away', graceSec: Math.round(RECONNECT_GRACE_MS / 1000) });
     p.graceTimer = setTimeout(() => {
       if (p.ws !== ws) return;
       if (p.pair) endPair(p.pair, p, 'disconnected');
