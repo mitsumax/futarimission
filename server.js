@@ -16,9 +16,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { handleUpgrade } = require('./lib/ws');
-const games = require('./lib/games');
-const { checkChat, cleanName } = require('./lib/filter');
+const { handleUpgrade } = require('./ws');
+const games = require('./games');
+const { checkChat, cleanName } = require('./filter');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
