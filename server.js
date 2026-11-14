@@ -11,6 +11,9 @@
  *   HASH_SALT         salt for hashing IPs/tokens in report logs (set a long random value!)
  *   ADMIN_TOKEN       enables the admin page at /admin (enter this token there)
  *   DATA_DIR          where reports.jsonl / bans.json are written (default ./data)
+ *   MIN_AGE           minimum age shown in the terms and on the start screen (default 18)
+ *   CONTACT_EMAIL     contact address shown in the terms / privacy policy
+ *   OPERATOR_NAME     operator name shown in the terms / privacy policy
  */
 const http = require('http');
 const fs = require('fs');
@@ -26,6 +29,11 @@ const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const HASH_SALT = process.env.HASH_SALT || crypto.randomBytes(16).toString('hex');
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const MIN_AGE = Math.max(0, Math.min(99, parseInt(process.env.MIN_AGE, 10) || 18));
+const CONTACT_EMAIL = (process.env.CONTACT_EMAIL || '').trim();
+const OPERATOR_NAME = (process.env.OPERATOR_NAME || 'ふたりミッション運営者').trim();
+const POLICY_UPDATED = process.env.POLICY_UPDATED || '2026年11月14日';
+const REPORT_RETENTION_DAYS = 180;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 
 // ---- tunables ----
@@ -54,6 +62,19 @@ try {
   const saved = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'bans.json'), 'utf8'));
   for (const [k, v] of Object.entries(saved)) if (v > now()) bans.set(k, v);
 } catch (e) { /* none yet */ }
+// Reports are kept for REPORT_RETENTION_DAYS (stated in the privacy policy), then deleted.
+function pruneReports() {
+  const file = path.join(DATA_DIR, 'reports.jsonl');
+  let lines;
+  try { lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean); } catch (e) { return 0; }
+  const cutoff = Date.now() - REPORT_RETENTION_DAYS * 24 * 3600_000;
+  const keep = lines.filter((l) => { try { return Date.parse(JSON.parse(l).ts) >= cutoff; } catch (e) { return false; } });
+  if (keep.length !== lines.length) fs.writeFileSync(file, keep.length ? keep.join('\n') + '\n' : '');
+  return lines.length - keep.length;
+}
+pruneReports();
+setInterval(pruneReports, 6 * 3600_000).unref();
+
 function saveBans() {
   const o = {}; for (const [k, v] of bans) if (v > now()) o[k] = v;
   fs.writeFile(path.join(DATA_DIR, 'bans.json'), JSON.stringify(o), () => {});
@@ -372,7 +393,25 @@ const SEC_HEADERS = {
 };
 
 // Only these files are public. Everything else in the folder (server code, data) is never served.
-const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/favicon.svg': 'favicon.svg', '/admin': 'admin.html' };
+const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/favicon.svg': 'favicon.svg', '/admin': 'admin.html',
+  '/terms': 'terms.html', '/privacy': 'privacy.html' };
+
+// {{PLACEHOLDERS}} in the HTML pages are filled from environment variables (HTML-escaped)
+const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const PAGE_VARS = {
+  MIN_AGE: String(MIN_AGE),
+  CONTACT_EMAIL: CONTACT_EMAIL || '（準備中：運営者が設定します）',
+  OPERATOR_NAME: OPERATOR_NAME,
+  UPDATED: POLICY_UPDATED,
+};
+const pageCache = new Map();
+function renderPage(file) {
+  if (!pageCache.has(file)) {
+    const html = fs.readFileSync(file, 'utf8').replace(/\{\{([A-Z_]+)\}\}/g, (m, k) => (k in PAGE_VARS ? escHtml(PAGE_VARS[k]) : m));
+    pageCache.set(file, Buffer.from(html, 'utf8'));
+  }
+  return pageCache.get(file);
+}
 
 function serveStatic(req, res) {
   let urlPath;
@@ -385,6 +424,7 @@ function serveStatic(req, res) {
     const ext = path.extname(file);
     res.writeHead(200, { ...SEC_HEADERS, 'Content-Type': MIME[ext] || 'application/octet-stream',
       'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=3600' });
+    if (ext === '.html') return res.end(req.method === 'HEAD' ? undefined : renderPage(file));
     fs.createReadStream(file).pipe(res);
   });
 }
@@ -504,7 +544,11 @@ server.on('upgrade', (req, socket) => {
 });
 
 if (require.main === module) {
-  server.listen(PORT, HOST, () => console.log(`ふたりミッション server: http://localhost:${PORT}`));
+  server.listen(PORT, HOST, () => {
+    console.log(`ふたりミッション server: http://localhost:${PORT}`);
+    if (!CONTACT_EMAIL) console.warn('⚠️  CONTACT_EMAIL が未設定です。利用規約・プライバシーポリシーの問い合わせ先が「準備中」と表示されます。');
+    if (!process.env.HASH_SALT) console.warn('⚠️  HASH_SALT が未設定です。再起動のたびに利用停止の記録が引き継がれなくなります。');
+  });
 }
 
-module.exports = { server, _state: { players, queue, pairs, rooms } };
+module.exports = { server, pruneReports, _state: { players, queue, pairs, rooms } };

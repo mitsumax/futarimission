@@ -2,9 +2,11 @@
 // Protocol / integration tests against a real server instance. Run: node test-protocol.js (Node >= 22)
 process.env.TRUST_PROXY = '1';
 process.env.ADMIN_TOKEN = 'test-admin-token-123';
+process.env.MIN_AGE = '16';
+process.env.CONTACT_EMAIL = 'help<x>@example.com';
 process.env.DATA_DIR = require('path').join(require('os').tmpdir(), 'futari-test-' + Date.now());
 const assert = require('assert');
-const { server, _state } = require('./server');
+const { server, _state, pruneReports } = require('./server');
 
 let PORT;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -299,6 +301,32 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     await fetch(base + 'handled', { method: 'POST', headers: H, body: JSON.stringify({ id: reps[0].id, handled: true }) });
     assert.strictEqual((await (await fetch(base + 'reports', { headers: H })).json())[0].handled, true);
     const page = await fetch(`http://127.0.0.1:${PORT}/admin`); assert.strictEqual(page.status, 200);
+  });
+
+
+  await t('terms & privacy pages: served with age / contact filled in (HTML-escaped); start screen shows the age', async () => {
+    const terms = await (await fetch(`http://127.0.0.1:${PORT}/terms`)).text();
+    const privacy = await (await fetch(`http://127.0.0.1:${PORT}/privacy`)).text();
+    const index = await (await fetch(`http://127.0.0.1:${PORT}/`)).text();
+    for (const [name, html] of [['terms', terms], ['privacy', privacy], ['index', index]]) {
+      assert.ok(!/\{\{[A-Z_]+\}\}/.test(html), name + ' has unfilled placeholders');
+    }
+    assert.ok(terms.includes('16歳以上') && terms.includes('非営利') && terms.includes('最大40件') && terms.includes('180日'));
+    assert.ok(terms.includes('help&lt;x&gt;@example.com') && !terms.includes('help<x>'), 'contact is escaped');
+    assert.ok(privacy.includes('Cookieは使いません') && privacy.includes('help&lt;x&gt;@example.com'));
+    assert.ok(index.includes('16歳以上です') && index.includes('href="/terms"') && index.includes('href="/privacy"'));
+  });
+
+  await t('reports older than 180 days are deleted automatically', async () => {
+    const fs = require('fs'), path = require('path');
+    const file = path.join(process.env.DATA_DIR, 'reports.jsonl');
+    const old = { id: 'old1', ts: new Date(Date.now() - 181 * 86400_000).toISOString(), log: [] };
+    const fresh = { id: 'new1', ts: new Date().toISOString(), log: [] };
+    const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    fs.writeFileSync(file, before + JSON.stringify(old) + '\n' + JSON.stringify(fresh) + '\n');
+    assert.strictEqual(pruneReports(), 1);
+    const ids = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l).id);
+    assert.ok(!ids.includes('old1') && ids.includes('new1'));
   });
 
   console.log(`\n${n} protocol tests passed`);

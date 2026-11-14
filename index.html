@@ -36,11 +36,15 @@ input[type=text]:focus{border-color:var(--coral)}
 .logo span{color:var(--coral)}
 .tag{font-size:13px;color:var(--muted);text-align:center;line-height:1.7;margin-top:-4px}
 .label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.footer-links{font-size:11px}
+.footer-links a{color:var(--muted)}
+a.linkbtn{display:inline}
 .linkbtn{background:none;border:none;padding:0;color:var(--coral);font-weight:700;text-decoration:underline;font-size:inherit}
 .rules{text-align:left;font-size:13px;line-height:1.7;margin:0;padding-left:1.2em}
 .check{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5}
 .check input{margin-top:3px;width:18px;height:18px;accent-color:var(--coral)}
 .games-preview{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.games-preview .gp{font-size:10px;padding:8px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gp{background:var(--bg);border-radius:14px;padding:10px 6px;text-align:center;font-size:11px;color:var(--muted)}
 .gp b{display:block;font-size:22px;margin-bottom:2px}
 .note{font-size:11px;color:var(--muted);text-align:center;line-height:1.6}
@@ -206,7 +210,7 @@ input[type=text]:focus{border-color:var(--coral)}
       <div class="label">ニックネーム</div>
       <input type="text" id="nameIn" maxlength="12" placeholder="例: はる" required>
     </div>
-    <label class="check"><input type="checkbox" id="ageIn" required> <span><button type="button" class="linkbtn" id="rulesBtn">あそびのルール</button>に同意します（出会い目的の利用・連絡先の交換は禁止）</span></label>
+    <label class="check"><input type="checkbox" id="ageIn" required> <span>{{MIN_AGE}}歳以上です。<a href="/terms" target="_blank" rel="noopener" class="linkbtn">利用規約</a>と<a href="/privacy" target="_blank" rel="noopener" class="linkbtn">プライバシーポリシー</a>に同意します。<button type="button" class="linkbtn" id="rulesBtn">あそびのルール</button>（出会い目的の利用・連絡先の交換は禁止）</span></label>
     <div class="invite-banner hidden" id="inviteBanner"></div>
     <button type="submit" id="startBtn" data-action="search">ランダムで相手を探す</button>
     <div class="or" id="orLine">友だちと遊ぶ</div>
@@ -215,6 +219,7 @@ input[type=text]:focus{border-color:var(--coral)}
       <button type="submit" class="soft" data-action="join">🔑 招待コードで入る</button>
     </div>
     <div class="note" id="introNote">登録は不要。ニックネームだけで遊べます。<br>チャットはゲームが終わると消え、どこにも保存されません。</div>
+    <div class="note footer-links"><a href="/terms" target="_blank" rel="noopener">利用規約</a>・<a href="/privacy" target="_blank" rel="noopener">プライバシーポリシー</a>・<a href="/terms#contact" target="_blank" rel="noopener">お問い合わせ</a><br>無料・広告なしの非営利サービスです</div>
   </form>
 </section>
 
@@ -425,7 +430,7 @@ function note(text, warn){ $("introNote").textContent=text; $("introNote").style
 $("rulesBtn").onclick=()=>{
   openDialog(`<div class="h">あそびのルール</div>
   <ul class="rules">
-    <li>このアプリは、ふたりで協力してゲームをクリアするためのものです。</li>
+    <li>このアプリは、ふたりで協力してゲームをクリアするためのものです。{{MIN_AGE}}歳以上の方が利用できます。</li>
     <li>出会い・恋愛・交際を目的とした利用は禁止です。</li>
     <li>電話番号・メールアドレス・SNSやメッセージアプリのIDなど、連絡先の交換は禁止です（自動でブロックされます）。</li>
     <li>相手が嫌がることや、悪口・性的な発言は禁止です。</li>
