@@ -28,7 +28,33 @@ const QUESTIONS = [
 ];
 const K_TOTAL = 6, K_GOAL = 4;
 
-const GAME_IDS = ['kokoro', 'lock', 'maze', 'draw', 'puzzle', 'ten'];
+const GAME_IDS = ['kokoro', 'lock', 'maze', 'draw', 'puzzle', 'ten', 'ngword'];
+
+// ---- NGワードトーク: [お題, [[NGワード(表示), 同じとみなす書き方...], ...]]
+// Short hiragana that hides inside everyday words (e.g. からい in "だからいい") is avoided on purpose.
+const NG_TOPICS = [
+  ['夏休み', [['花火', 'はなび'], ['宿題', 'しゅくだい'], ['スイカ', 'すいか', '西瓜'], ['プール', 'ぷーる'], ['海水浴', 'かいすいよく'], ['かき氷', 'かきごおり']]],
+  ['お正月', [['お年玉', 'おとしだま'], ['おせち'], ['初詣', 'はつもうで'], ['年賀状', 'ねんがじょう'], ['お餅'], ['こたつ', 'コタツ', '炬燵']]],
+  ['カレー', [['じゃがいも', 'ジャガイモ'], ['スパイス'], ['にんじん', '人参'], ['福神漬け', '福神漬', 'ふくじんづけ'], ['インド'], ['ご飯', 'ごはん']]],
+  ['遊園地', [['ジェットコースター'], ['観覧車', 'かんらんしゃ'], ['お化け屋敷', 'おばけやしき'], ['メリーゴーランド'], ['行列', 'ぎょうれつ'], ['チケット']]],
+  ['コンビニ', [['おにぎり', 'お握り'], ['レジ'], ['お弁当', '弁当', 'べんとう'], ['深夜', 'しんや'], ['アイス'], ['雑誌', 'ざっし']]],
+  ['学校', [['先生', 'せんせい'], ['給食', 'きゅうしょく'], ['テスト'], ['教室', 'きょうしつ'], ['部活', 'ぶかつ'], ['チャイム']]],
+  ['犬', [['散歩', 'さんぽ'], ['しっぽ', '尻尾'], ['ドッグフード'], ['ワンワン'], ['首輪', 'くびわ'], ['柴犬', 'しばいぬ']]],
+  ['雨', [['梅雨'], ['長靴', 'ながぐつ'], ['カッパ', 'かっぱ', '合羽'], ['水たまり', 'みずたまり'], ['虹'], ['雷', 'かみなり']]],
+  ['スマホ', [['充電', 'じゅうでん'], ['アプリ'], ['画面', 'がめん'], ['電池', 'でんち'], ['カメラ'], ['写真', 'しゃしん']]],
+  ['誕生日', [['ケーキ'], ['プレゼント'], ['ろうそく', '蝋燭'], ['パーティー', 'パーティ'], ['おめでとう'], ['年齢', 'ねんれい']]],
+  ['お寿司', [['マグロ', 'まぐろ', '鮪'], ['わさび', '山葵'], ['回転', 'かいてん'], ['醤油', 'しょうゆ'], ['サーモン'], ['職人', 'しょくにん']]],
+  ['冬', [['雪'], ['寒い', 'さむい'], ['マフラー'], ['手袋', 'てぶくろ'], ['クリスマス'], ['スキー']]],
+  ['旅行', [['ホテル'], ['飛行機', 'ひこうき'], ['お土産', 'おみやげ'], ['温泉', 'おんせん'], ['スーツケース'], ['新幹線', 'しんかんせん']]],
+  ['映画館', [['ポップコーン'], ['スクリーン'], ['チケット'], ['予告', 'よこく'], ['座席', 'ざせき'], ['ジュース']]],
+  ['料理', [['包丁', 'ほうちょう'], ['フライパン'], ['レシピ'], ['味見', 'あじみ'], ['冷蔵庫', 'れいぞうこ'], ['エプロン']]],
+  ['ゲーム', [['コントローラー', 'コントローラ'], ['ボス'], ['レベル'], ['クリア'], ['セーブ'], ['課金', 'かきん']]],
+  ['朝', [['目覚まし', 'めざまし'], ['朝ごはん', 'あさごはん', '朝ご飯', '朝食'], ['寝坊', 'ねぼう'], ['歯みがき', '歯磨き', 'はみがき'], ['コーヒー'], ['布団', 'ふとん']]],
+  ['動物園', [['ライオン'], ['キリン', 'きりん'], ['パンダ', 'ぱんだ'], ['飼育員', 'しいくいん'], ['ペンギン', 'ぺんぎん'], ['ゴリラ', 'ごりら']]],
+  ['海', [['砂浜', 'すなはま'], ['波'], ['水着', 'みずぎ'], ['日焼け', 'ひやけ'], ['貝殻', 'かいがら'], ['浮き輪', 'うきわ']]],
+  ['お祭り', [['屋台', 'やたい'], ['浴衣', 'ゆかた'], ['金魚すくい', 'きんぎょすくい'], ['たこ焼き', 'たこやき'], ['神輿', 'みこし'], ['太鼓']]],
+];
+const NG_COUNT = 3, NG_MS = 180_000, NG_QUOTA = 5, NG_MIN_LEN = 5;
 
 // ---- お絵かき伝言: お題 [表示用, ...正解として認める書き方]
 const WORDS = [
@@ -92,6 +118,10 @@ function startGame(S, game) {
     const hand = () => Array.from({ length: 5 }, () => 1 + rnd(9));
     S.data = { hands: { a: hand(), b: hand() }, round: 0, hist: [], pick: { a: null, b: null }, reveal: false };
     S.data.target = tenTarget(S.data);
+  } else if (game === 'ngword') {
+    const [topic, cands] = NG_TOPICS[rnd(NG_TOPICS.length)];
+    S.data = { topic, ng: shuffle(cands).slice(0, NG_COUNT), deadline: Date.now() + NG_MS,
+      said: { a: 0, b: 0 }, last: { a: '', b: '' } };
   }
 }
 
@@ -127,6 +157,32 @@ function newLock(S, round) {
     instr: ((round + (S.swap ? 0 : 1)) % 2 === 0) ? 'a' : 'b',
     input: 0,
   };
+}
+
+// Match without turning katakana into hiragana (otherwise レジ would hide in "これじゃない").
+// Hiragana forms also match the same word typed in katakana (すいか ↔ スイカ).
+const ngNorm = (t) => String(t).normalize('NFKC').toLowerCase().replace(/[\s、。，．,.!！?？「」『』・〜~_-]/g, '');
+const toHira = (t) => t.replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+function ngMatch(text, form) {
+  const t = ngNorm(text), f = ngNorm(form);
+  if (t.includes(f)) return true;
+  return /^[\u3041-\u309fー]+$/.test(f) && toHira(t).includes(f);
+}
+
+/** NGワードトーク: every chat line goes through here. Returns { changed, hit } (hit = NG word said). */
+function onChat(S, role, text) {
+  const out = { changed: false, hit: null };
+  if (S.phase !== 'play' || S.game !== 'ngword' || !S.data) return out;
+  const D = S.data, z = ngNorm(text);
+  const hit = D.ng.find((forms) => forms.some((f) => ngMatch(text, f)));
+  if (hit) {
+    finish(S, false, `NGワード「${hit[0]}」が出ました`);
+    S.result.loser = role; S.result.ng = D.ng.map((f) => f[0]); S.result.topic = D.topic;
+    out.changed = true; out.hit = hit[0];
+    return out;
+  }
+  if ([...z].length >= NG_MIN_LEN && z !== D.last[role]) { D.said[role]++; D.last[role] = z; out.changed = true; }
+  return out;
 }
 
 function finish(S, clear, text) {
@@ -297,6 +353,17 @@ function tick(S, now = Date.now()) {
     endDrawRound(S, false, out.notes, now);
     out.changed = true;
   }
+  if (S.phase === 'play' && S.game === 'ngword' && S.data && now >= S.data.deadline) {
+    const D = S.data, okA = D.said.a >= NG_QUOTA, okB = D.said.b >= NG_QUOTA;
+    if (okA && okB) finish(S, true, `ふたりとも${NG_QUOTA}回以上話して、NGワードを言わずに生き残った！`);
+    else {
+      finish(S, false, '発言のノルマが足りませんでした');
+      S.result.loser = !okA && !okB ? 'both' : !okA ? 'a' : 'b';
+    }
+    S.result.ng = D.ng.map((f) => f[0]); S.result.topic = D.topic;
+    out.notes.push('⏰ タイムアップ！');
+    out.changed = true;
+  }
   return out;
 }
 
@@ -319,6 +386,10 @@ function chatGuard(S, role, text) {
 /** What `role` is allowed to see. */
 function view(S, role, now = Date.now()) {
   const v = { phase: S.phase, game: S.game, bond: S.bond, clears: S.clears, result: S.result };
+  if (S.result && S.result.loser) {
+    const l = S.result.loser;
+    v.result = { ...S.result, loser: l === 'both' ? 'both' : l === role ? 'me' : 'partner' };
+  }
   if (S.phase !== 'play' || !S.data) return v;
   const D = S.data, op = other(role);
   if (S.game === 'kokoro') {
@@ -368,7 +439,12 @@ function view(S, role, now = Date.now()) {
       theirs: D.reveal ? D.hands[op][D.pick[op]] : null,
     };
   }
+  if (S.phase === 'play' && S.game === 'ngword' && S.data) {
+    const D = S.data;
+    v.play = { topic: D.topic, ngCount: D.ng.length, left: Math.max(0, D.deadline - now), quota: NG_QUOTA, minLen: NG_MIN_LEN,
+      mine: D.said[role], theirs: D.said[op] };
+  }
   return v;
 }
 
-module.exports = { newPairState, apply, view, tick, chatGuard, normWord, GAME_IDS, QUESTIONS, WORDS, genMaze, _internal: { startGame } };
+module.exports = { newPairState, apply, view, tick, chatGuard, onChat, normWord, ngMatch, NG_TOPICS, GAME_IDS, QUESTIONS, WORDS, genMaze, _internal: { startGame } };

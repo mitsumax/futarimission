@@ -239,6 +239,9 @@ function onMessage(p, raw) {
       p.pair.log.push({ role: p.role, text, ts }); if (p.pair.log.length > 40) p.pair.log.shift();
       send(p, { t: 'chat', from: 'me', id: m.id, text, ts });
       send(partnerOf(p), { t: 'chat', from: 'partner', text, ts });
+      const ng = games.onChat(p.pair.S, p.role, text);   // NGワードトーク
+      if (ng.hit) sysBoth(p.pair, `💣 NGワード「${ng.hit}」！ ${p.name}さんが言ってしまった…`);
+      if (ng.changed) pushView(p.pair);
       return;
     }
     case 'leave': {

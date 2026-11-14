@@ -179,6 +179,23 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     H2.ws.close(); G.ws.close(); await sleep(50);
   });
 
+
+  await t('ngword: the chat line is delivered, then the game ends with the speaker as loser', async () => {
+    const { A, B } = await joinAndMatch('10.4.0.1', '10.4.0.2');
+    await A.next('view'); await B.next('view');
+    A.send({ t: 'act', a: { type: 'pick', game: 'ngword' } });
+    const v = (await A.next('view')).view; await B.next('view');
+    assert.ok(v.play.topic && !('ng' in v.play));
+    const pair = [..._state.pairs.values()].find((x) => x.S.game === 'ngword');
+    const word = pair.S.data.ng[0][0];
+    B.send({ t: 'chat', text: word + 'ってよくない？', id: 'n1' });
+    assert.ok((await A.next('chat')).text.includes(word));
+    const sys = await A.next('sys'); assert.ok(sys.text.startsWith('💣') && sys.text.includes('はなこ'));
+    let res; for (;;) { const m = await A.next('view'); if (m.view.phase === 'result') { res = m.view.result; break; } }
+    assert.strictEqual(res.loser, 'partner'); assert.strictEqual(res.ng.length, 3);
+    A.ws.close(); B.ws.close(); await sleep(50);
+  });
+
   await t('leave with block → never re-matched with that person', async () => {
     const { A, B } = await joinAndMatch('10.0.5.1', '10.0.5.2');
     A.send({ t: 'leave', block: true }); await B.next('partner_left');

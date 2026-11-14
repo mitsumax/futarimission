@@ -42,7 +42,7 @@ input[type=text]:focus{border-color:var(--coral)}
 .rules{text-align:left;font-size:13px;line-height:1.7;margin:0;padding-left:1.2em}
 .check{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5}
 .check input{margin-top:3px;width:18px;height:18px;accent-color:var(--coral)}
-.games-preview{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.games-preview{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .gp{background:var(--bg);border-radius:14px;padding:10px 6px;text-align:center;font-size:11px;color:var(--muted)}
 .gp b{display:block;font-size:22px;margin-bottom:2px}
 .note{font-size:11px;color:var(--muted);text-align:center;line-height:1.6}
@@ -202,6 +202,7 @@ input[type=text]:focus{border-color:var(--coral)}
       <div class="gp"><b>🎨</b>お絵かき伝言</div>
       <div class="gp"><b>🧩</b>ふたりパズル</div>
       <div class="gp"><b>🃏</b>合わせて○○</div>
+      <div class="gp"><b>💣</b>NGワード</div>
     </div>
     <div>
       <div class="label">ニックネーム</div>
@@ -290,6 +291,7 @@ const GAMES = {
   draw:  {ic:"🎨",name:"お絵かき伝言",desc:"片方がお題を絵で描いて、もう片方が当てる。80秒で3問中2問正解すればクリア。"},
   puzzle:{ic:"🧩",name:"ふたりパズル",desc:"自分のピースの正しい場所は相手にしか見えない。教え合って9マスを完成させよう。"},
   ten:   {ic:"🃏",name:"合わせて○○",desc:"お互いのカードは見えない。数字を言わずにヒントだけで、合計をぴったり目標に。"},
+  ngword:{ic:"💣",name:"NGワードトーク",desc:"お題について3分間おしゃべり。どこかに隠れたNGワードを言ったら負け！ 黙っていても負け。"},
 };
 const STAMPS = { fun:["🎉","たのしかった！"], team:["🤝","ナイスチーム！"], thanks:["🙏","ありがとう！"], again:["🔁","またあそぼ！"] };
 const QUICK = ["よろしくね！","ナイス！👏","ごめん🙏","ありがとう！","どれにする？","😊","🤣","👍"];
@@ -389,11 +391,11 @@ function onMsg(m){
       renderTop(); renderStage(); show("playScr"); return;
     case "view":
       V = m.view; V._at = performance.now();
-      if(V.result && V.result.id!==lastResultId){ lastResultId=V.result.id; sfx(V.result.clear?"clear":"fail"); if(V.result.clear) confetti(); }
+      if(V.result && V.result.id!==lastResultId){ lastResultId=V.result.id; const win=V.result.clear||V.result.loser==="partner"; sfx(win?"clear":"fail"); if(win) confetti(); }
       renderTop(); renderStage(); return;
     case "sys":
       sys(m.text);
-      if(/^[❌💥⏰🏳️]/u.test(m.text)) sfx("bad"); else if(/^[⭕🔓]/u.test(m.text)) sfx("good"); else if(/^🧩/u.test(m.text)) sfx("tap");
+      if(/^[❌💥⏰🏳️💣]/u.test(m.text)) sfx("bad"); else if(/^[⭕🔓]/u.test(m.text)) sfx("good"); else if(/^🧩/u.test(m.text)) sfx("tap");
       return;
     case "chat": addMsg(m.text, m.from==="me", m.ts); if(m.from!=="me") sfx("msg"); return;
     case "chat_rejected": sys("🚫 "+m.text); sfx("bad"); return;
@@ -544,6 +546,7 @@ function renderStage(){
   if(V.game==="draw") return renderDraw(st);
   if(V.game==="puzzle") return renderPuzzle(st);
   if(V.game==="ten") return renderTen(st);
+  if(V.game==="ngword") return renderNg(st);
 }
 function renderSelect(st){
   st.innerHTML = `<div class="card"><p class="h">どれに挑戦する？</p><div class="sub">どちらが選んでもOK。チャットで相談してから決めよう。${V.clears?`<br>これまでのクリア: <b>${V.clears}</b>回`:""}</div></div>
@@ -552,6 +555,7 @@ function renderSelect(st){
 }
 function renderResult(st){
   const r=V.result, g=GAMES[r.game];
+  if(r.game==="ngword") return renderNgResult(st, r, g);
   st.innerHTML = `<div class="card center" style="display:flex;flex-direction:column;gap:12px">
     <div class="big">${r.clear?"🎉":"🤝"}</div>
     <p class="h">${r.clear?"ミッションクリア！":"おしい！"}</p>
@@ -758,6 +762,49 @@ function renderTen(st){
   st.querySelectorAll(".ncard[data-i]").forEach(b=>b.onclick=()=>act({type:"pick", i:+b.dataset.i, r:P.round}));
   if(P.reveal) $("tNext").onclick=()=>act({type:"next", r:P.round});
 }
+
+/* ---------------- NGワードトーク ---------------- */
+function renderNg(st){
+  const P=V.play;
+  const bar=(n)=>Array.from({length:P.quota},(_,i)=>`<i class="${i<n?"ok":""}"></i>`).join("");
+  st.innerHTML = `<div class="card" style="display:flex;flex-direction:column;gap:14px">
+    <div class="row" style="justify-content:space-between"><span class="role">💣 NGワードトーク</span><span class="sub">⏱ <span class="timer" id="ngTimer">--</span></span></div>
+    <div class="sub center">今回のお題</div>
+    <div class="word" style="font-size:34px">${esc(P.topic)}</div>
+    <div class="sub center">このお題に関係する <b style="color:var(--coral)">NGワードが${P.ngCount}つ</b> 隠れています。<br>チャットで言ってしまった人の負け！ 何がNGかは2人とも知りません。</div>
+    <div class="twocol" style="grid-template-columns:1fr 1fr">
+      <div class="center"><div class="sub">あなたの発言</div><div class="progress" style="margin-top:6px">${bar(P.mine)}</div><div class="sub"><b>${Math.min(P.mine,P.quota)}</b>/${P.quota}</div></div>
+      <div class="center"><div class="sub">${esc(partner?partner.name:"相手")}さん</div><div class="progress" style="margin-top:6px">${bar(P.theirs)}</div><div class="sub"><b>${Math.min(P.theirs,P.quota)}</b>/${P.quota}</div></div>
+    </div>
+    <div class="sub center" style="font-size:12px">⚠️ 黙っていても勝てません。3分の間に${P.quota}回以上（${P.minLen}文字以上の発言）話さないと負けです</div>
+  </div>`;
+}
+function renderNgResult(st, r, g){
+  const nm = esc(partner?partner.name:"相手");
+  const head = r.clear ? ["🎉","ふたりとも生き残った！"]
+    : r.loser==="me" ? ["😵", r.text.startsWith("NG") ? "NGワードを言ってしまった…" : "発言が足りなかった…"]
+    : r.loser==="partner" ? ["🏆", r.text.startsWith("NG") ? `あなたの勝ち！ ${nm}さんがNGワードを言った` : `あなたの勝ち！ ${nm}さんの発言が足りなかった`]
+    : ["🤝","ふたりとも発言が足りなかった…"];
+  st.innerHTML = `<div class="card center" style="display:flex;flex-direction:column;gap:12px">
+    <div class="big">${head[0]}</div>
+    <p class="h">${head[1]}</p>
+    <div class="sub">${g.ic} ${g.name}（お題：${esc(r.topic||"")}）<br>${esc(r.text)}</div>
+    <div class="sub">隠れていたNGワード</div>
+    <div class="chips">${(r.ng||[]).map(w=>`<span class="chip" style="text-decoration:none;color:var(--coral);border-color:var(--coral);font-weight:700;font-size:14px">${esc(w)}</span>`).join("")}</div>
+    <div class="sub">${r.clear?"ふたりの息がぴったり！ 仲良し度 +25":"いっしょに遊んで 仲良し度 +8"}</div>
+    <div class="row"><button id="again">もう一度</button><button class="soft" id="menu">ほかのゲーム</button></div></div>
+    <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="sub center">${nm}さんにスタンプを送ろう</div>
+    <div class="stamps">${Object.entries(STAMPS).map(([k,[e,t]])=>`<button data-st="${k}">${e} ${t}</button>`).join("")}</div></div>`;
+  $("again").onclick=()=>act({type:"again"});
+  $("menu").onclick=()=>act({type:"menu"});
+  st.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>send({t:"stamp", id:b.dataset.st}));
+}
+setInterval(()=>{
+  const el=$("ngTimer"); if(!el || !V || V.game!=="ngword" || V.phase!=="play") return;
+  const left=Math.max(0, V.play.left - (performance.now()-V._at)), s=Math.ceil(left/1000);
+  el.textContent = Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); el.classList.toggle("low", s<=20);
+  if(s<=5 && s>0 && s!==el._last){ el._last=s; sfx("tick"); }
+}, 250);
 
 /* ---------------- stamps ---------------- */
 function showStamp(id, mine){

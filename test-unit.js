@@ -210,6 +210,58 @@ t('ten: target is always reachable; 4 rounds then result', () => {
   }
 });
 
+
+t('ngword: saying a hidden NG word loses; partner wins; NG words revealed at the end', () => {
+  const S = games.newPairState();
+  games.apply(S, 'a', { type: 'pick', game: 'ngword' });
+  const D = S.data;
+  assert.strictEqual(D.ng.length, 3);
+  const vb = games.view(S, 'b');
+  assert.ok(!JSON.stringify(vb).includes(D.ng[0][0]), 'NG words are hidden while playing');
+  assert.strictEqual(games.onChat(S, 'a', '今日はいい天気だね').hit, null);
+  const r = games.onChat(S, 'b', 'やっぱり' + D.ng[2][D.ng[2].length - 1] + 'だよね');
+  assert.strictEqual(r.hit, D.ng[2][0]);
+  assert.strictEqual(games.view(S, 'b').result.loser, 'me');
+  assert.strictEqual(games.view(S, 'a').result.loser, 'partner');
+  assert.deepStrictEqual(games.view(S, 'a').result.ng, D.ng.map((f) => f[0]));
+});
+
+t('ngword: speaking quota counts only 5+ char, non-repeated lines; time up decides', () => {
+  const S = games.newPairState();
+  games.apply(S, 'a', { type: 'pick', game: 'ngword' });
+  const lines = ['それでさーどうなったの', 'へえーおもしろいね', 'わたしもそう思うなあ', 'たしかにそれはあるかも', 'なるほどねーいいなあ'];
+  games.onChat(S, 'a', 'うん'); games.onChat(S, 'a', lines[0]); games.onChat(S, 'a', lines[0]);
+  assert.strictEqual(S.data.said.a, 1);
+  for (const l of lines.slice(1)) games.onChat(S, 'a', l);
+  for (const l of lines) games.onChat(S, 'b', l + 'ね');
+  const safe = S.data.ng.every((forms) => !lines.some((l) => forms.some((f) => games.ngMatch(l, f))));
+  if (!safe) return;
+  games.tick(S, S.data.deadline + 1);
+  assert.strictEqual(S.result.clear, true);
+  const S2 = games.newPairState();
+  games.apply(S2, 'a', { type: 'pick', game: 'ngword' });
+  games.tick(S2, S2.data.deadline + 1);
+  assert.strictEqual(S2.result.clear, false);
+  assert.strictEqual(games.view(S2, 'a').result.loser, 'both');
+});
+
+t('ngword: no NG word hides inside everyday chat (false-positive scan)', () => {
+  const everyday = ['これじゃない？', 'それじゃあね', 'やりたいことある？', 'いったいこれ何', 'おもちゃみたい', 'だからいいよ',
+    'よろしくね！', 'ナイス！👏', 'ごめん🙏', 'ありがとう！', 'どれにする？', 'たのしいね', 'わかった', 'そうだね', 'まじで？',
+    'なるほどね', 'いいね', '次いこう', 'がんばろう', 'どうしよう', 'すごいね', 'ほんとに？', 'それな', 'うれしい', 'たしかに',
+    'ちょっと待って', '好きなものある？', 'どこ住み？はダメか', '最近なにしてる？', 'おもしろいね', 'ねむい', 'おなかすいた',
+    'こんにちは', 'こんばんは', 'はじめまして', 'またあそぼ', 'たのしかった', 'ナイスチーム', 'どっちがいい？', 'えーっと'];
+  const bad = [];
+  for (const [topic, cands] of games.NG_TOPICS) for (const forms of cands) for (const f of forms)
+    for (const e of everyday) if (games.ngMatch(e, f)) bad.push(`${topic}:${f} in "${e}"`);
+  assert.deepStrictEqual(bad, []);
+  // katakana words still match katakana, hiragana forms match either script
+  assert.ok(games.ngMatch('レジで並んだ', 'レジ'));
+  assert.ok(!games.ngMatch('これじゃない', 'レジ'));
+  assert.ok(games.ngMatch('スイカ割りしたい', 'すいか'));
+  assert.ok(games.ngMatch('ｽｲｶ食べた', 'スイカ'));
+});
+
 console.log('filter');
 t('blocks contact info', () => {
   for (const s of ['090-1234-5678', '０９０１２３４５６７８', 'ゼロ9０ 1234 5678', 'LINE交換しよ', 'ライン交換しよ', 'らいんやってる？', 'インスタやってる？', 'abc@gmail.com', '@hiro_123', 'line教えて', 'ID:abc', 'https://x.com/abc', 'discord やってる', 'DMして'])
