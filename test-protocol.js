@@ -48,9 +48,11 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   PORT = server.address().port;
 
-  await t('same-gender players are matched (gender-blind)', async () => {
+  await t('players are matched; no gender is stored or sent (even if a client sends one)', async () => {
     const { A, B, mA, mB } = await joinAndMatch('10.0.0.1', '10.0.0.2');
     assert.strictEqual(mA.partner.name, 'はなこ'); assert.strictEqual(mB.partner.name, 'たろう');
+    assert.deepStrictEqual(Object.keys(mA.partner), ['name']);
+    assert.ok(![..._state.players.values()].some((p) => 'g' in p), 'server keeps no gender field');
     A.ws.close(); B.ws.close(); await sleep(50);
   });
 

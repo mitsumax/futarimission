@@ -75,7 +75,7 @@ const connsPerIp = new Map();
 
 function send(p, msg) { if (p && p.ws && !p.ws.closed) p.ws.send(JSON.stringify(msg)); }
 function partnerOf(p) { if (!p.pair) return null; return p.role === 'a' ? p.pair.b : p.pair.a; }
-function publicInfo(p) { return { name: p.name, g: p.g }; }
+function publicInfo(p) { return { name: p.name }; }   // gender is not collected or shown
 
 function pushView(pair) {
   const t = now();
@@ -179,8 +179,7 @@ function onMessage(p, raw) {
       const name = cleanName(m.name);
       if (!name) return send(p, { t: 'error', code: 'name', text: 'そのニックネームは使えません（連絡先や不適切な言葉は使えません）' });
       p.name = name;
-      p.g = ['m', 'f', 'n'].includes(m.g) ? m.g : 'n';
-      return send(p, { t: 'profile_ok', name: p.name, g: p.g });
+      return send(p, { t: 'profile_ok', name: p.name });
     }
     case 'search': {
       if (!p.name) return send(p, { t: 'error', code: 'name', text: 'ニックネームを設定してください' });
@@ -314,12 +313,12 @@ function attach(ws, req, token) {
     p.ws = ws; p.ip = ip; p.ipHash = ipHash; resumed = true;
   } else {
     token = crypto.randomBytes(16).toString('hex');
-    p = { token, name: '', g: 'n', ws, ip, ipHash, state: 'idle', pair: null, role: null,
+    p = { token, name: '', ws, ip, ipHash, state: 'idle', pair: null, role: null,
       blocked: new Set(), recent: new Map(), chatTimes: [], actTimes: [], graceTimer: null };
     players.set(token, p);
   }
 
-  send(p, { t: 'hello', token: p.token, name: p.name, g: p.g, state: p.state, resumed });
+  send(p, { t: 'hello', token: p.token, name: p.name, state: p.state, resumed });
   if (p.state === 'paired' && p.pair) {
     const q = partnerOf(p);
     send(p, { t: 'matched', partner: publicInfo(q), resumed: true });

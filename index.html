@@ -38,13 +38,8 @@ input[type=text]:focus{border-color:var(--coral)}
 .logo span{color:var(--coral)}
 .tag{font-size:13px;color:var(--muted);text-align:center;line-height:1.7;margin-top:-4px}
 .label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
-.gender{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.gender button.sel.n{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 14%,transparent)}
 .linkbtn{background:none;border:none;padding:0;color:var(--coral);font-weight:700;text-decoration:underline;font-size:inherit}
 .rules{text-align:left;font-size:13px;line-height:1.7;margin:0;padding-left:1.2em}
-.gender button{background:var(--bg);color:var(--ink);border:2px solid var(--line);padding:12px}
-.gender button.sel.m{border-color:var(--m);background:color-mix(in srgb,var(--m) 14%,transparent)}
-.gender button.sel.f{border-color:var(--f);background:color-mix(in srgb,var(--f) 14%,transparent)}
 .check{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5}
 .check input{margin-top:3px;width:18px;height:18px;accent-color:var(--coral)}
 .games-preview{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -212,14 +207,6 @@ input[type=text]:focus{border-color:var(--coral)}
       <div class="label">ニックネーム</div>
       <input type="text" id="nameIn" maxlength="12" placeholder="例: はる" required>
     </div>
-    <div>
-      <div class="label">あなたの性別（相手に表示されます）</div>
-      <div class="gender">
-        <button type="button" class="m" data-g="m">男性</button>
-        <button type="button" class="f" data-g="f">女性</button>
-        <button type="button" class="n" data-g="n">ひみつ</button>
-      </div>
-    </div>
     <label class="check"><input type="checkbox" id="ageIn" required> <span><button type="button" class="linkbtn" id="rulesBtn">あそびのルール</button>に同意します（出会い目的の利用・連絡先の交換は禁止）</span></label>
     <div class="invite-banner hidden" id="inviteBanner"></div>
     <button type="submit" id="startBtn" data-action="search">ランダムで相手を探す</button>
@@ -228,7 +215,7 @@ input[type=text]:focus{border-color:var(--coral)}
       <button type="submit" class="soft" data-action="host">🏠 部屋を作って招待</button>
       <button type="submit" class="soft" data-action="join">🔑 招待コードで入る</button>
     </div>
-    <div class="note" id="introNote">登録は不要。ランダムの相手は性別に関係なく決まります。<br>チャットはゲームが終わると消え、どこにも保存されません。</div>
+    <div class="note" id="introNote">登録は不要。ニックネームだけで遊べます。<br>チャットはゲームが終わると消え、どこにも保存されません。</div>
   </form>
 </section>
 
@@ -308,7 +295,8 @@ const STAMPS = { fun:["🎉","たのしかった！"], team:["🤝","ナイス�
 const QUICK = ["よろしくね！","ナイス！👏","ごめん🙏","ありがとう！","どれにする？","😊","🤣","👍"];
 
 /* ---------------- state ---------------- */
-let me = { name: store.get("fm-name")||"", g: store.get("fm-g")||"" };
+let me = { name: store.get("fm-name")||"" };
+try{ localStorage.removeItem("fm-g"); }catch(e){}
 let ws = null, connected = false, token = sess.get("fm-token") || "", retry = 0, wantSearch = false;
 let partner = null, V = null, lastResultId = null, screen = "intro";
 let pendingAction = null;   // "search" | "host" | {join:code} — run after the server accepts our profile
@@ -369,13 +357,13 @@ function onMsg(m){
       if(m.state==="wait"){ show("lobbyScr"); return; }
       if(inviteCode && screen==="intro") send({t:"room_info", code:inviteCode});
       // the server no longer knows us (restart / long disconnect)
-      if(screen==="lobbyScr" && me.name){ wantSearch=true; send({t:"profile", name:me.name, g:me.g}); }
+      if(screen==="lobbyScr" && me.name){ wantSearch=true; send({t:"profile", name:me.name}); }
       else if(screen==="hostScr"){ show("intro"); note("接続が切れたため、部屋が閉じられました。もう一度作ってください", true); }
       else if(screen==="playScr"){ partner=null; show("intro"); note("接続が長く切れたため、ゲームが終了しました。もう一度はじめてください。", true); }
-      else if(wantSearch && me.name){ send({t:"profile", name:me.name, g:me.g}); }
+      else if(wantSearch && me.name){ send({t:"profile", name:me.name}); }
       return;
     case "profile_ok":
-      me.name=m.name; me.g=m.g; store.set("fm-name",me.name); store.set("fm-g",me.g);
+      me.name=m.name; store.set("fm-name",me.name);
       if(pendingAction) runPending();
       else if(wantSearch){ wantSearch=false; send({t:"search"}); }
       return;
@@ -433,9 +421,6 @@ function onMsg(m){
 
 /* ---------------- intro ---------------- */
 $("nameIn").value = me.name;
-function paintGender(){ document.querySelectorAll(".gender button").forEach(b=>b.classList.toggle("sel", b.dataset.g===me.g)); }
-document.querySelectorAll(".gender button").forEach(b=>b.onclick=()=>{ me.g=b.dataset.g; paintGender(); });
-paintGender();
 function note(text, warn){ $("introNote").textContent=text; $("introNote").style.color = warn?"var(--coral)":""; }
 $("rulesBtn").onclick=()=>{
   openDialog(`<div class="h">あそびのルール</div>
@@ -454,11 +439,10 @@ $("introForm").addEventListener("submit", e=>{
   const action = (e.submitter && e.submitter.dataset.action) || $("startBtn").dataset.action || "search";
   const n = $("nameIn").value.trim().slice(0,12);
   if(!n) return;
-  if(!["m","f","n"].includes(me.g)){ note("性別を選んでください（「ひみつ」も選べます）", true); return; }
   if(!$("ageIn").checked) return;
   me.name = n;
   if(!connected){ note("サーバーに接続しています…少し待ってからもう一度押してください", true); return; }
-  const go = (a)=>{ pendingAction=a; send({t:"profile", name:me.name, g:me.g}); };
+  const go = (a)=>{ pendingAction=a; send({t:"profile", name:me.name}); };
   if(action==="joinInvite") return go({join:inviteCode});
   if(action==="host") return go("host");
   if(action==="join"){
@@ -527,9 +511,10 @@ function reportDialog(){
 function renderTop(){
   if(!partner) return;
   $("pName").textContent = partner.name;
-  $("pSub").textContent = ({m:"男性",f:"女性",n:"性別ひみつ"}[partner.g]||"")+" · いっしょにプレイ中";
+  $("pSub").textContent = "いっしょにプレイ中";
   $("pAv").textContent = partner.name.slice(0,1);
-  $("pAv").style.background = partner.g==="f" ? "var(--f)" : partner.g==="m" ? "var(--m)" : "var(--teal)";
+  const AV=["#f0675a","#2f9c8f","#5b8def","#e8a33d","#9b6ad6","#d9607f"];
+  $("pAv").style.background = AV[[...partner.name].reduce((h,c)=>(h*31+c.codePointAt(0))>>>0,7) % AV.length];
   const b = V ? V.bond : 0;
   $("bondLv").textContent = "Lv" + (1+Math.floor(b/50));
   $("bondFill").style.width = ((b%50)/50*100)+"%";
