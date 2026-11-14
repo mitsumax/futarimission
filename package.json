@@ -1,0 +1,13 @@
+{
+  "name": "futari-mission",
+  "version": "1.0.0",
+  "description": "ふたりミッション — 知らない二人がチャットしながら協力ゲームに挑戦するWebアプリ（サーバー版）",
+  "main": "server.js",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/unit.js && node test/protocol.js"
+  },
+  "license": "UNLICENSED"
+}
