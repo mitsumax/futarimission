@@ -312,6 +312,7 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
       assert.ok(!/\{\{[A-Z_]+\}\}/.test(html), name + ' has unfilled placeholders');
     }
     assert.ok(terms.includes('16歳以上') && terms.includes('非営利') && terms.includes('最大40件') && terms.includes('180日'));
+    assert.ok(terms.includes('一切の責任を負いません') && terms.includes('故意または重大な過失') && terms.includes('自己の責任において') && terms.includes('分離可能性'));
     assert.ok(terms.includes('help&lt;x&gt;@example.com') && !terms.includes('help<x>'), 'contact is escaped');
     assert.ok(privacy.includes('Cookieは使いません') && privacy.includes('help&lt;x&gt;@example.com'));
     assert.ok(index.includes('16歳以上です') && index.includes('href="/terms"') && index.includes('href="/privacy"'));
