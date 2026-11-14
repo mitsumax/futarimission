@@ -27,6 +27,7 @@ const { handleUpgrade } = require('./ws');
 const games = require('./games');
 const { checkChat, cleanName } = require('./filter');
 const { Storage } = require('./storage');
+const { BotBrain, BOT_NAME } = require('./bot');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -87,9 +88,12 @@ const connsPerIp = new Map();
  pair   = { id, a, b, S, log:[{role,text,ts}] }
 */
 
-function send(p, msg) { if (p && p.ws && !p.ws.closed) p.ws.send(JSON.stringify(msg)); }
+function send(p, msg) {
+  if (p && p.isBot) return p.brain.receive(JSON.parse(JSON.stringify(msg)));   // the AI gets the same messages a browser would
+  if (p && p.ws && !p.ws.closed) p.ws.send(JSON.stringify(msg));
+}
 function partnerOf(p) { if (!p.pair) return null; return p.role === 'a' ? p.pair.b : p.pair.a; }
-function publicInfo(p) { return { name: p.name }; }   // gender is not collected or shown
+function publicInfo(p) { return p.isBot ? { name: p.name, ai: true } : { name: p.name }; }   // gender is not collected or shown
 
 function pushView(pair) {
   const t = now();
@@ -165,9 +169,19 @@ setInterval(() => {
   }
 }, 30_000);
 
+// ---------------------------------------------------------------- AI partner (rule-based, see bot.js)
+function createBot() {
+  const bot = { token: 'bot-' + uid(), name: BOT_NAME, isBot: true, ws: null, ip: 'bot', ipHash: 'bot', state: 'idle', pair: null, role: null,
+    blocked: new Set(), recent: new Map(), chatTimes: [], actTimes: [], stampTimes: [], graceTimer: null };
+  // the bot acts through the normal message handler, so every rule and filter applies to it too
+  bot.brain = new BotBrain((m) => { if (bot.pair) onMessage(bot, JSON.stringify(m)); });
+  return bot;
+}
+
 function endPair(pair, leaver, reason) {
   if (!pairs.has(pair.id)) return;
   pairs.delete(pair.id);
+  for (const p of [pair.a, pair.b]) if (p.isBot) p.brain.stop();
   for (const p of [pair.a, pair.b]) {
     const q = p === pair.a ? pair.b : pair.a;
     p.recent.set(q.token, now() + PREFER_NEW_MS);
@@ -268,12 +282,20 @@ function onMessage(p, raw) {
       send(partnerOf(p), { t: 'read', upTo });
       return;
     }
+    case 'play_ai': {   // play with the AI instead of (or while) waiting for a person
+      if (!p.name) return send(p, { t: 'error', code: 'name', text: 'ニックネームを設定してください' });
+      if (p.state === 'wait') { queue.delete(p); p.state = 'idle'; }
+      if (p.state === 'hosting') closeRoom(p);
+      if (p.state !== 'idle') return;
+      makePair(p, createBot());
+      return broadcastStats();
+    }
     case 'leave': {
       if (p.state === 'wait') { queue.delete(p); p.state = 'idle'; }
       if (p.state === 'hosting') closeRoom(p);
       if (p.pair) {
         const q = partnerOf(p);
-        if (m.block && q) p.blocked.add(q.token);
+        if (m.block && q && !q.isBot) p.blocked.add(q.token);
         endPair(p.pair, p, m.block ? 'blocked' : 'left');
       }
       send(p, { t: 'left' });
@@ -282,6 +304,7 @@ function onMessage(p, raw) {
     case 'report': {
       if (!p.pair) return;
       const q = partnerOf(p);
+      if (q.isBot) { endPair(p.pair, p, 'left'); return send(p, { t: 'left' }); }   // nothing to report about the AI
       const reason = String(m.reason || '').slice(0, 300);
       const entry = {
         id: uid(), ts: new Date().toISOString(), pairId: p.pair.id,
@@ -486,7 +509,8 @@ async function handleAdmin(req, res, u) {
     const reportsToday = readReports(1000).filter((r) => Date.parse(r.ts) > dayAgo).length;
     return json(res, 200, {
       online: [...players.values()].filter((p) => p.ws && !p.ws.closed).length,
-      waiting: queue.size, pairs: pairs.size,
+      waiting: queue.size, pairs: [...pairs.values()].filter((x) => !x.a.isBot && !x.b.isBot).length,
+      aiPairs: [...pairs.values()].filter((x) => x.a.isBot || x.b.isBot).length,
       bans: [...bans.values()].filter((v) => v > now()).length,
       reportsToday, uptimeSec: Math.round(process.uptime()), storage: store.status(),
     });

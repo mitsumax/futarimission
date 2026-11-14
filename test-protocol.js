@@ -214,6 +214,28 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     A.ws.close(); B.ws.close(); await sleep(50);
   });
 
+
+  await t('AI partner: starts at once, is labelled as AI, chats and reads; reporting it records nothing; humans are not matched with it', async () => {
+    const A = await client('10.6.0.1'); await A.next('hello');
+    A.send({ t: 'profile', name: 'ひとり' }); await A.next('profile_ok');
+    A.send({ t: 'play_ai' });
+    const m = await A.next('matched');
+    assert.deepStrictEqual(m.partner, { name: 'ロボ（AI）', ai: true });
+    const greet = await A.next('chat'); assert.ok(greet.text.includes('AI'));
+    A.send({ t: 'chat', text: 'よろしく！', id: 'q1' }); await A.next('chat');   // my own echo
+    assert.ok((await A.next('read')).upTo >= 1, 'AI marks messages as read');
+    const fs = require('fs'), path = require('path');
+    const file = path.join(process.env.DATA_DIR, 'reports.jsonl');
+    const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').length : 0;
+    A.send({ t: 'report', reason: 'test' }); await A.next('left'); await sleep(150);
+    assert.strictEqual(fs.existsSync(file) ? fs.readFileSync(file, 'utf8').length : 0, before, 'no report stored for the AI');
+    // a waiting human is never paired with an AI by the matcher
+    const B = await client('10.6.0.2'); await B.next('hello');
+    B.send({ t: 'profile', name: 'まつひと' }); await B.next('profile_ok'); B.send({ t: 'search' }); await sleep(1500);
+    assert.ok(!B.inbox.some((x) => x.t === 'matched'));
+    A.ws.close(); B.ws.close(); await sleep(50);
+  });
+
   await t('leave with block → never re-matched with that person', async () => {
     const { A, B } = await joinAndMatch('10.0.5.1', '10.0.5.2');
     A.send({ t: 'leave', block: true }); await B.next('partner_left');

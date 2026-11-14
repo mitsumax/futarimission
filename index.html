@@ -73,7 +73,7 @@ a.linkbtn{display:inline}
 .stat b{font-size:18px;color:var(--ink)}
 /* ---------- play ---------- */
 #playScr{display:grid;grid-template-columns:minmax(0,1fr) 360px;grid-template-rows:auto minmax(0,1fr)}
-.topbar{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.topbar{grid-column:1/-1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
 .partner{display:flex;align-items:center;gap:8px;min-width:0}
 .avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;flex:none}
 .partner .nm{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -89,7 +89,7 @@ a.linkbtn{display:inline}
 .stage-inner{width:100%;max-width:560px;display:flex;flex-direction:column;gap:14px;align-items:stretch}
 .chat{border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
 @media (max-width:820px){
-  #playScr{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1.7fr) minmax(0,1fr)}
+  #playScr{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1.7fr) minmax(0,1fr)}
   #playScr .mazewrap{max-width:min(420px,28vh)}
   #playScr .card{padding:12px}
   #playScr .pad{grid-template-rows:repeat(2,46px)}
@@ -236,6 +236,7 @@ a.linkbtn{display:inline}
     <label class="check"><input type="checkbox" id="ageIn" required> <span>{{MIN_AGE}}歳以上です。<a href="/terms" target="_blank" rel="noopener" class="linkbtn">利用規約</a>と<a href="/privacy" target="_blank" rel="noopener" class="linkbtn">プライバシーポリシー</a>に同意します。<button type="button" class="linkbtn" id="rulesBtn">あそびのルール</button>（出会い目的の利用・連絡先の交換は禁止）</span></label>
     <div class="invite-banner hidden" id="inviteBanner"></div>
     <button type="submit" id="startBtn" data-action="search">ランダムで相手を探す</button>
+    <button type="submit" class="soft" id="aiBtn" data-action="ai">🤖 AIと遊ぶ（すぐ始められます）</button>
     <div class="or" id="orLine">友だちと遊ぶ</div>
     <div class="btnrow" id="friendBtns">
       <button type="submit" class="soft" data-action="host">🏠 部屋を作って招待</button>
@@ -255,6 +256,7 @@ a.linkbtn{display:inline}
       <div>いま相手を探している人 <b id="cntW">1</b></div>
     </div>
     <div class="tag" id="lobbyMsg">相手が見つかると、自動でつながります。</div>
+    <button class="soft" id="lobbyAiBtn" type="button">🤖 待っている間、AIと遊ぶ</button>
     <button class="ghost" id="cancelBtn" type="button">やめる</button>
   </div>
 </section>
@@ -332,13 +334,14 @@ let inviteCode = (()=>{ try{ const c=new URLSearchParams(location.search).get("r
 function runPending(){
   const a=pendingAction; pendingAction=null; wantSearch=false;
   if(a==="search") send({t:"search"});
+  else if(a==="ai") send({t:"play_ai"});
   else if(a==="host") send({t:"host"});
   else if(a && a.join) send({t:"join_room", code:a.join});
 }
 function clearInvite(){
   inviteCode=""; $("inviteBanner").classList.add("hidden");
   $("startBtn").textContent="ランダムで相手を探す"; $("startBtn").dataset.action="search";
-  $("orLine").classList.remove("hidden"); $("friendBtns").classList.remove("hidden");
+  $("orLine").classList.remove("hidden"); $("friendBtns").classList.remove("hidden"); $("aiBtn").classList.remove("hidden");
   try{ history.replaceState(null,"",location.pathname); }catch(e){}
 }
 function showInvite(hostName){
@@ -346,7 +349,7 @@ function showInvite(hostName){
   const strong=document.createElement("b"); strong.textContent=hostName;
   b.append("💌 ", strong, " さんから招待が届いています");
   $("startBtn").textContent="招待された部屋に入る"; $("startBtn").dataset.action="joinInvite";
-  $("orLine").classList.add("hidden"); $("friendBtns").classList.add("hidden");
+  $("orLine").classList.add("hidden"); $("friendBtns").classList.add("hidden"); $("aiBtn").classList.add("hidden");
   if(!$("cancelInvite")){
     const c=document.createElement("button"); c.type="button"; c.id="cancelInvite"; c.className="linkbtn"; c.style.cssText="font-size:12px;align-self:center";
     c.textContent="招待を使わずにはじめる"; c.onclick=clearInvite; $("startBtn").after(c);
@@ -413,7 +416,11 @@ function onMsg(m){
       if(inviteCode) clearInvite();
       if(!m.resumed) sfx("match");
       setPartnerAway(false);
-      if(!m.resumed){ resetReads(); $("log").textContent=""; sys("マッチングしました！まずは「よろしく」から始めよう 👋"); sys("連絡先の交換・出会い目的の利用は禁止です"); }
+      if(!m.resumed){
+        resetReads(); $("log").textContent="";
+        if(partner.ai) sys("🤖 AIの「ロボ」とつながりました。ロボはプログラムで動くAIで、人間ではありません", "ok");
+        else { sys("マッチングしました！まずは「よろしく」から始めよう 👋"); sys("連絡先の交換・出会い目的の利用は禁止です"); }
+      }
       else sys("再接続しました");
       renderTop(); renderStage(); show("playScr"); return;
     case "view":
@@ -501,6 +508,7 @@ $("introForm").addEventListener("submit", e=>{
     $("dCancel").onclick=closeDialog;
     return;
   }
+  if(action==="ai") return go("ai");
   go("search");
 });
 
@@ -529,10 +537,21 @@ function startLobbyUI(){
   $("radarIc").textContent="🎮";
   $("lobbyMsg").textContent="相手が見つかると、自動でつながります。";
 }
+$("lobbyAiBtn").onclick=()=>send({t:"play_ai"});
 $("cancelBtn").onclick=()=>{ send({t:"cancel"}); show("intro"); };
 
 /* ---------------- play: leave / report ---------------- */
 $("leaveBtn").onclick=()=>{
+  if(partner && partner.ai){
+    openDialog(`<div class="h">AIとの遊びを終わりますか？</div>
+      <button id="dHuman">人の相手を探す</button>
+      <button class="soft" id="dTop">トップへ戻る</button>
+      <button class="ghost" id="dCancel">キャンセル</button>`);
+    $("dHuman").onclick=()=>{ closeDialog(); send({t:"leave"}); partner=null; send({t:"search"}); };
+    $("dTop").onclick=()=>{ closeDialog(); send({t:"leave"}); partner=null; show("intro"); };
+    $("dCancel").onclick=closeDialog;
+    return;
+  }
   openDialog(`<div class="h">退出しますか？</div><div class="sub">相手との接続が切れます。</div>
     <button id="dFun">🎉「たのしかった！」を送って退出</button>
     <button class="soft" id="dLeave">そのまま退出して新しい相手を探す</button>
@@ -558,10 +577,10 @@ function reportDialog(){
 function renderTop(){
   if(!partner) return;
   $("pName").textContent = partner.name;
-  $("pSub").textContent = "いっしょにプレイ中";
-  $("pAv").textContent = partner.name.slice(0,1);
+  $("pSub").textContent = partner.ai ? "🤖 プログラムで動くAI" : "いっしょにプレイ中";
+  $("pAv").textContent = partner.ai ? "🤖" : partner.name.slice(0,1);
   const AV=["#f0675a","#2f9c8f","#5b8def","#e8a33d","#9b6ad6","#d9607f"];
-  $("pAv").style.background = AV[[...partner.name].reduce((h,c)=>(h*31+c.codePointAt(0))>>>0,7) % AV.length];
+  $("pAv").style.background = partner.ai ? "#5b6b8f" : AV[[...partner.name].reduce((h,c)=>(h*31+c.codePointAt(0))>>>0,7) % AV.length];
   const b = V ? V.bond : 0;
   $("bondLv").textContent = "Lv" + (1+Math.floor(b/50));
   $("bondFill").style.width = ((b%50)/50*100)+"%";

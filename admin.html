@@ -145,7 +145,7 @@ async function load() {
 
 function renderStats(s) {
   const t = $("tiles"); t.textContent = "";
-  const items = [["いま接続中", s.online], ["相手を探し中", s.waiting], ["遊んでいるペア", s.pairs], ["24時間の通報", s.reportsToday], ["利用停止中", s.bans],
+  const items = [["いま接続中", s.online], ["相手を探し中", s.waiting], ["遊んでいるペア", s.pairs], ["AIと遊んでいる人", s.aiPairs || 0], ["24時間の通報", s.reportsToday], ["利用停止中", s.bans],
     ["稼働時間", s.uptimeSec > 3600 ? Math.floor(s.uptimeSec / 3600) + "時間" : Math.floor(s.uptimeSec / 60) + "分"]];
   for (const [l, v] of items) t.append(el("div", { class: "tile" }, el("div", { class: "v" }, v), el("div", { class: "l" }, l)));
   const st = s.storage || {};
