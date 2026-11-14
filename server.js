@@ -250,12 +250,22 @@ function onMessage(p, raw) {
       const why = games.chatGuard(p.pair.S, p.role, text) || checkChat(text);
       if (why) return send(p, { t: 'chat_rejected', id: m.id, text: why });
       const ts = now();
+      const seq = p.pair.chatSeq = (p.pair.chatSeq || 0) + 1;   // per-pair message number (for read receipts)
       p.pair.log.push({ role: p.role, text, ts }); if (p.pair.log.length > 40) p.pair.log.shift();
-      send(p, { t: 'chat', from: 'me', id: m.id, text, ts });
-      send(partnerOf(p), { t: 'chat', from: 'partner', text, ts });
+      send(p, { t: 'chat', from: 'me', id: m.id, text, ts, seq });
+      send(partnerOf(p), { t: 'chat', from: 'partner', text, ts, seq });
       const ng = games.onChat(p.pair.S, p.role, text);   // NGワードトーク
       if (ng.hit) sysBoth(p.pair, `💣 NGワード「${ng.hit}」！ ${p.name}さんが言ってしまった…`);
       if (ng.changed) pushView(p.pair);
+      return;
+    }
+    case 'read': {   // "I have seen the chat up to message #upTo" → tell the partner (既読)
+      if (p.state !== 'paired' || !p.pair) return;
+      const upTo = Number(m.upTo);
+      const pr = p.pair.readUpTo || (p.pair.readUpTo = { a: 0, b: 0 });
+      if (!Number.isInteger(upTo) || upTo <= pr[p.role] || upTo > (p.pair.chatSeq || 0)) return;
+      pr[p.role] = upTo;
+      send(partnerOf(p), { t: 'read', upTo });
       return;
     }
     case 'leave': {
@@ -339,6 +349,8 @@ function attach(ws, req, token) {
   if (p.state === 'paired' && p.pair) {
     const q = partnerOf(p);
     send(p, { t: 'matched', partner: publicInfo(q), resumed: true });
+    const pr = p.pair.readUpTo; const theirRead = pr ? pr[p.role === 'a' ? 'b' : 'a'] : 0;
+    if (theirRead) send(p, { t: 'read', upTo: theirRead });
     send(p, { t: 'view', view: games.view(p.pair.S, p.role) });
     send(q, { t: 'partner_back' });
   } else if (p.state === 'wait') {

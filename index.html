@@ -102,6 +102,7 @@ a.linkbtn{display:inline}
 .msg .bubble{padding:8px 12px;border-radius:16px;background:var(--bg);border:1px solid var(--line);word-break:break-word;line-height:1.5;font-size:14px}
 .msg.mine{align-self:flex-end;align-items:flex-end}
 .msg.mine .bubble{background:var(--coral);color:#fff;border-color:transparent}
+.msg .readmark{color:var(--coral);font-weight:700;margin-right:2px}
 .msg .t{font-size:10px;color:var(--muted);margin:2px 4px}
 .sys{align-self:center;font-size:11px;color:var(--muted);text-align:center;padding:2px 10px;background:var(--bg);border-radius:99px}
 .quick{display:flex;gap:6px;padding:6px 10px 0;overflow-x:auto;scrollbar-width:none}
@@ -409,7 +410,7 @@ function onMsg(m){
       partner = m.partner; V=null;
       if(inviteCode) clearInvite();
       if(!m.resumed) sfx("match");
-      if(!m.resumed){ $("log").textContent=""; sys("マッチングしました！まずは「よろしく」から始めよう 👋"); sys("連絡先の交換・出会い目的の利用は禁止です"); }
+      if(!m.resumed){ resetReads(); $("log").textContent=""; sys("マッチングしました！まずは「よろしく」から始めよう 👋"); sys("連絡先の交換・出会い目的の利用は禁止です"); }
       else sys("再接続しました");
       renderTop(); renderStage(); show("playScr"); return;
     case "view":
@@ -420,7 +421,11 @@ function onMsg(m){
       sys(m.text);
       if(/^[❌💥⏰🏳️💣]/u.test(m.text)) sfx("bad"); else if(/^[⭕🔓]/u.test(m.text)) sfx("good"); else if(/^🧩/u.test(m.text)) sfx("tap");
       return;
-    case "chat": addMsg(m.text, m.from==="me", m.ts); if(m.from!=="me") sfx("msg"); return;
+    case "chat":
+      addMsg(m.text, m.from==="me", m.ts, m.seq);
+      if(m.from!=="me"){ sfx("msg"); if(m.seq) lastPartnerSeq=Math.max(lastPartnerSeq,m.seq); reportRead(); }
+      return;
+    case "read": if(Number.isInteger(m.upTo)) markReadUpTo(m.upTo); return;
     case "chat_rejected": sys("🚫 "+m.text); sfx("bad"); return;
     case "stamp": showStamp(m.id, m.from==="me"); return;
     case "partner_away": sys(`${partner?partner.name:"相手"} さんの接続が不安定です…少し待ってね`); $("pSub").textContent="接続待ち…"; return;
@@ -895,12 +900,33 @@ function sfx(name){
 }
 
 /* ---------------- chat ---------------- */
-function addMsg(text, mine, ts){
+function addMsg(text, mine, ts, seq){
   const el=document.createElement("div"); el.className="msg"+(mine?" mine":"");
   const b=document.createElement("div"); b.className="bubble"; b.textContent=text;
-  const t=document.createElement("div"); t.className="t"; t.textContent=new Date(ts||Date.now()).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+  const t=document.createElement("div"); t.className="t";
+  if(mine && seq){ el.dataset.seq=seq; const r=document.createElement("span"); r.className="readmark"; t.appendChild(r); }
+  t.append(new Date(ts||Date.now()).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}));
   el.append(b,t); $("log").appendChild(el); $("log").scrollTop=$("log").scrollHeight;
+  if(mine && seq && seq<=readByPartner) markReadUpTo(readByPartner);
 }
+
+/* ---- 既読 (read receipts) ---- */
+let lastPartnerSeq=0, lastSentRead=0, readByPartner=0;
+function resetReads(){ lastPartnerSeq=0; lastSentRead=0; readByPartner=0; }
+// Tell the partner we've seen their messages — only while this screen is actually visible.
+function reportRead(){
+  if(lastPartnerSeq>lastSentRead && document.visibilityState==="visible" && screen==="playScr"){
+    lastSentRead=lastPartnerSeq; send({t:"read", upTo:lastPartnerSeq});
+  }
+}
+function markReadUpTo(n){
+  readByPartner=Math.max(readByPartner,n);
+  document.querySelectorAll("#log .msg.mine[data-seq]").forEach(el=>{
+    if(+el.dataset.seq<=readByPartner){ const r=el.querySelector(".readmark"); if(r && !r.textContent) r.textContent="既読 "; }
+  });
+}
+document.addEventListener("visibilitychange", reportRead);
+window.addEventListener("focus", reportRead);
 function sys(text){ const el=document.createElement("div"); el.className="sys"; el.textContent=text; $("log").appendChild(el); $("log").scrollTop=$("log").scrollHeight; }
 function sendChat(text){ text=String(text).trim().slice(0,200); if(text) send({t:"chat", text, id:uid()}); }
 $("compose").addEventListener("submit", e=>{ e.preventDefault(); sendChat($("msgIn").value); $("msgIn").value=""; });

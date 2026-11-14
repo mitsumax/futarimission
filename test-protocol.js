@@ -198,6 +198,22 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     A.ws.close(); B.ws.close(); await sleep(50);
   });
 
+
+  await t('read receipts: partner reading relays 既読 up to that message; bad / backwards values ignored', async () => {
+    const { A, B } = await joinAndMatch('10.5.0.1', '10.5.0.2');
+    A.send({ t: 'chat', text: 'ひとつめ', id: 'r1' }); A.send({ t: 'chat', text: 'ふたつめ', id: 'r2' });
+    const m1 = await B.next('chat'), m2 = await B.next('chat');
+    assert.ok(m1.seq === 1 && m2.seq === 2);
+    assert.strictEqual((await A.next('chat')).seq, 1);
+    B.send({ t: 'read', upTo: 99 }); B.send({ t: 'read', upTo: 'x' });   // beyond what exists / not a number
+    await sleep(150); assert.ok(!A.inbox.some((m) => m.t === 'read'));
+    B.send({ t: 'read', upTo: 2 });
+    assert.strictEqual((await A.next('read')).upTo, 2);
+    B.send({ t: 'read', upTo: 1 });                                        // going backwards
+    await sleep(150); assert.ok(!A.inbox.some((m) => m.t === 'read'));
+    A.ws.close(); B.ws.close(); await sleep(50);
+  });
+
   await t('leave with block → never re-matched with that person', async () => {
     const { A, B } = await joinAndMatch('10.0.5.1', '10.0.5.2');
     A.send({ t: 'leave', block: true }); await B.next('partner_left');
