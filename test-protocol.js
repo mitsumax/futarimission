@@ -239,6 +239,15 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     const r2 = await fetch(`http://127.0.0.1:${PORT}/server.js`); assert.strictEqual(r2.status, 404);
     const r4 = await fetch(`http://127.0.0.1:${PORT}/%2e%2e/server.js`); assert.ok([403, 404].includes(r4.status));
     const r3 = await fetch(`http://127.0.0.1:${PORT}/healthz`); assert.strictEqual(r3.status, 200);
+    // no third-party requests: pages reference no external hosts, and the CSP forbids them
+    const fs2 = require('fs');
+    for (const f of ['index.html', 'admin.html']) {
+      const html = fs2.readFileSync(require('path').join(__dirname, f), 'utf8');
+      const ext = (html.match(/(?:src|href)=["']https?:\/\/[^"']+/g) || []);
+      assert.deepStrictEqual(ext, [], f + ' loads external resources');
+    }
+    const csp = r.headers.get('content-security-policy');
+    assert.ok(!/https?:\/\//.test(csp), 'CSP allows no external hosts');
   });
 
 
