@@ -118,6 +118,65 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     A.ws.close(); B.ws.close(); C.ws.close(); await sleep(50);
   });
 
+
+  await t('private room: create → look up → join by code (lower-case ok) → paired', async () => {
+    const H = await client('10.3.0.1'); await H.next('hello');
+    H.send({ t: 'profile', name: 'ホスト', g: 'f' }); await H.next('profile_ok');
+    H.send({ t: 'host' });
+    const { code } = await H.next('hosting');
+    assert.match(code, /^[A-HJ-NP-Z2-9]{6}$/);
+    const G = await client('10.3.0.2'); await G.next('hello');
+    G.send({ t: 'room_info', code });
+    const info = await G.next('room_info'); assert.strictEqual(info.ok, true); assert.strictEqual(info.host, 'ホスト');
+    G.send({ t: 'profile', name: 'ゲスト', g: 'm' }); await G.next('profile_ok');
+    G.send({ t: 'join_room', code: code.toLowerCase() });
+    assert.strictEqual((await G.next('matched')).partner.name, 'ホスト');
+    assert.strictEqual((await H.next('matched')).partner.name, 'ゲスト');
+    assert.ok(!_state.rooms.has(code), 'room is consumed once used');
+    // a third person cannot use the same code
+    const X = await client('10.3.0.3'); await X.next('hello');
+    X.send({ t: 'profile', name: 'さんにんめ', g: 'n' }); await X.next('profile_ok');
+    X.send({ t: 'join_room', code }); await X.next('room_error');
+    H.ws.close(); G.ws.close(); X.ws.close(); await sleep(50);
+  });
+
+  await t('private room: wrong code, closed room, blocked user are all refused; hosts are not randomly matched', async () => {
+    const H = await client('10.3.1.1'); await H.next('hello');
+    H.send({ t: 'profile', name: 'ホスト2', g: 'n' }); await H.next('profile_ok');
+    H.send({ t: 'host' }); const { code } = await H.next('hosting');
+    const R = await client('10.3.1.9'); await R.next('hello');
+    R.send({ t: 'profile', name: 'ランダム', g: 'n' }); await R.next('profile_ok');
+    R.send({ t: 'search' }); await sleep(1500);
+    assert.ok(!R.inbox.some((m) => m.t === 'matched'), 'host must not be pulled into random matching');
+    const G = await client('10.3.1.2'); await G.next('hello');
+    G.send({ t: 'profile', name: 'ゲスト2', g: 'n' }); await G.next('profile_ok');
+    G.send({ t: 'join_room', code: 'ZZZZZZ' }); await G.next('room_error');
+    H.send({ t: 'cancel' }); await sleep(50);
+    G.send({ t: 'join_room', code }); await G.next('room_error');
+    // blocked
+    H.send({ t: 'host' }); const { code: code2 } = await H.next('hosting');
+    H.blockedToken = [..._state.players.values()].find((p) => p.name === 'ゲスト2').token;
+    [..._state.players.values()].find((p) => p.name === 'ホスト2').blocked.add(H.blockedToken);
+    G.send({ t: 'join_room', code: code2 }); await G.next('room_error');
+    H.ws.close(); G.ws.close(); R.ws.close(); await sleep(50);
+  });
+
+  await t('private room: guessing codes is rate-limited; host can reconnect and keep the room', async () => {
+    const G = await client('10.3.2.2'); await G.next('hello');
+    G.send({ t: 'profile', name: 'あてずっぽう', g: 'n' }); await G.next('profile_ok');
+    for (let i = 0; i < 13; i++) G.send({ t: 'join_room', code: 'AAAAA' + 'BCDEFGHJKMNPQ'[i] });
+    let msgs = []; for (let i = 0; i < 13; i++) msgs.push(await G.next('room_error'));
+    assert.ok(msgs.some((m) => m.text.includes('多すぎ')));
+    const H = await client('10.3.2.1'); H.hello = await H.next('hello');
+    H.send({ t: 'profile', name: 'ホスト3', g: 'n' }); await H.next('profile_ok');
+    H.send({ t: 'host' }); const { code } = await H.next('hosting');
+    H.ws.close(); await sleep(100);
+    const H2 = await client('10.3.2.1', H.hello.token);
+    assert.strictEqual((await H2.next('hello')).state, 'hosting');
+    assert.strictEqual((await H2.next('hosting')).code, code);
+    H2.ws.close(); G.ws.close(); await sleep(50);
+  });
+
   await t('leave with block → never re-matched with that person', async () => {
     const { A, B } = await joinAndMatch('10.0.5.1', '10.0.5.2');
     A.send({ t: 'leave', block: true }); await B.next('partner_left');

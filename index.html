@@ -146,6 +146,16 @@ input[type=text]:focus{border-color:var(--coral)}
 .stamp-pop .f{font-size:12px;color:var(--muted)}
 @keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}20%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-62%) scale(.96)}}
 #soundBtn{padding:7px 9px;font-size:15px}
+.invite-banner{background:color-mix(in srgb,var(--teal) 12%,transparent);border:1.5px solid color-mix(in srgb,var(--teal) 40%,transparent);color:var(--ink);border-radius:14px;padding:10px 12px;font-size:14px;text-align:center;line-height:1.6}
+.invite-banner b{color:var(--teal)}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btnrow button{font-size:13px;padding:10px 6px}
+.or{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.roomcode{font-size:40px;font-weight:800;letter-spacing:.18em;text-align:center;color:var(--coral);font-variant-numeric:tabular-nums;padding-left:.18em}
+.linkbox{display:flex;gap:8px}
+.linkbox input{flex:1;font-size:12px;color:var(--muted)}
+.codein{text-align:center;font-size:26px!important;letter-spacing:.2em;font-weight:800;text-transform:uppercase}
 .gamecard{display:flex;gap:12px;align-items:center;text-align:left;background:var(--panel);color:var(--ink);border:1.5px solid var(--line);border-radius:18px;padding:14px}
 .gamecard .ic{font-size:32px;width:52px;height:52px;border-radius:14px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex:none}
 .gamecard b{display:block;font-size:16px}
@@ -194,6 +204,9 @@ input[type=text]:focus{border-color:var(--coral)}
       <div class="gp"><b>💞</b>以心伝心</div>
       <div class="gp"><b>🔐</b>記号ロック</div>
       <div class="gp"><b>🌫️</b>霧の迷路</div>
+      <div class="gp"><b>🎨</b>お絵かき伝言</div>
+      <div class="gp"><b>🧩</b>ふたりパズル</div>
+      <div class="gp"><b>🃏</b>合わせて○○</div>
     </div>
     <div>
       <div class="label">ニックネーム</div>
@@ -208,8 +221,14 @@ input[type=text]:focus{border-color:var(--coral)}
       </div>
     </div>
     <label class="check"><input type="checkbox" id="ageIn" required> <span><button type="button" class="linkbtn" id="rulesBtn">あそびのルール</button>に同意します（出会い目的の利用・連絡先の交換は禁止）</span></label>
-    <button type="submit" id="startBtn">はじめる（登録不要）</button>
-    <div class="note" id="introNote">登録は不要。相手は性別に関係なくランダムに決まります。<br>チャットはゲームが終わると消え、どこにも保存されません。</div>
+    <div class="invite-banner hidden" id="inviteBanner"></div>
+    <button type="submit" id="startBtn" data-action="search">ランダムで相手を探す</button>
+    <div class="or" id="orLine">友だちと遊ぶ</div>
+    <div class="btnrow" id="friendBtns">
+      <button type="submit" class="soft" data-action="host">🏠 部屋を作って招待</button>
+      <button type="submit" class="soft" data-action="join">🔑 招待コードで入る</button>
+    </div>
+    <div class="note" id="introNote">登録は不要。ランダムの相手は性別に関係なく決まります。<br>チャットはゲームが終わると消え、どこにも保存されません。</div>
   </form>
 </section>
 
@@ -223,6 +242,23 @@ input[type=text]:focus{border-color:var(--coral)}
     </div>
     <div class="tag" id="lobbyMsg">相手が見つかると、自動でつながります。</div>
     <button class="ghost" id="cancelBtn" type="button">やめる</button>
+  </div>
+</section>
+
+<!-- ============ HOST (invite) ============ -->
+<section class="screen hidden" id="hostScr">
+  <div class="hero">
+    <div class="logo" style="font-size:22px">友だちを招待しよう</div>
+    <div class="tag">このリンクかコードを送ってください。<br>相手が入ると、自動でゲームが始まります。</div>
+    <div>
+      <div class="label" style="text-align:center">招待コード</div>
+      <div class="roomcode" id="roomCode">------</div>
+    </div>
+    <div class="linkbox"><input type="text" id="roomLink" readonly><button type="button" id="copyLink">コピー</button></div>
+    <button type="button" id="shareLink" class="hidden">📤 LINEやメッセージで送る</button>
+    <div class="radar" style="width:90px;height:90px"><div class="c" style="font-size:30px">🏠</div></div>
+    <div class="tag" id="hostMsg">相手が入るのを待っています…（30分間有効）</div>
+    <button class="ghost" id="hostCancel" type="button">部屋を閉じる</button>
   </div>
 </section>
 
@@ -275,9 +311,34 @@ const QUICK = ["よろしくね！","ナイス！👏","ごめん🙏","あり�
 let me = { name: store.get("fm-name")||"", g: store.get("fm-g")||"" };
 let ws = null, connected = false, token = sess.get("fm-token") || "", retry = 0, wantSearch = false;
 let partner = null, V = null, lastResultId = null, screen = "intro";
+let pendingAction = null;   // "search" | "host" | {join:code} — run after the server accepts our profile
+let inviteCode = (()=>{ try{ const c=new URLSearchParams(location.search).get("room"); return c ? c.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6) : ""; }catch(e){ return ""; } })();
+function runPending(){
+  const a=pendingAction; pendingAction=null; wantSearch=false;
+  if(a==="search") send({t:"search"});
+  else if(a==="host") send({t:"host"});
+  else if(a && a.join) send({t:"join_room", code:a.join});
+}
+function clearInvite(){
+  inviteCode=""; $("inviteBanner").classList.add("hidden");
+  $("startBtn").textContent="ランダムで相手を探す"; $("startBtn").dataset.action="search";
+  $("orLine").classList.remove("hidden"); $("friendBtns").classList.remove("hidden");
+  try{ history.replaceState(null,"",location.pathname); }catch(e){}
+}
+function showInvite(hostName){
+  const b=$("inviteBanner"); b.textContent=""; b.classList.remove("hidden");
+  const strong=document.createElement("b"); strong.textContent=hostName;
+  b.append("💌 ", strong, " さんから招待が届いています");
+  $("startBtn").textContent="招待された部屋に入る"; $("startBtn").dataset.action="joinInvite";
+  $("orLine").classList.add("hidden"); $("friendBtns").classList.add("hidden");
+  if(!$("cancelInvite")){
+    const c=document.createElement("button"); c.type="button"; c.id="cancelInvite"; c.className="linkbtn"; c.style.cssText="font-size:12px;align-self:center";
+    c.textContent="招待を使わずにはじめる"; c.onclick=clearInvite; $("startBtn").after(c);
+  }
+}
 
 /* ---------------- screens ---------------- */
-function show(id){ screen=id; ["intro","lobbyScr","playScr"].forEach(s=>$(s).classList.toggle("hidden", s!==id)); }
+function show(id){ screen=id; ["intro","lobbyScr","hostScr","playScr"].forEach(s=>$(s).classList.toggle("hidden", s!==id)); }
 
 /* ---------------- connection ---------------- */
 function connect(){
@@ -304,25 +365,36 @@ function onMsg(m){
   switch(m.t){
     case "hello":
       token = m.token; sess.set("fm-token", token);
-      if(m.state==="paired") return; // "matched" follows
+      if(m.state==="paired" || m.state==="hosting") return; // "matched" / "hosting" follows
       if(m.state==="wait"){ show("lobbyScr"); return; }
+      if(inviteCode && screen==="intro") send({t:"room_info", code:inviteCode});
       // the server no longer knows us (restart / long disconnect)
       if(screen==="lobbyScr" && me.name){ wantSearch=true; send({t:"profile", name:me.name, g:me.g}); }
+      else if(screen==="hostScr"){ show("intro"); note("接続が切れたため、部屋が閉じられました。もう一度作ってください", true); }
       else if(screen==="playScr"){ partner=null; show("intro"); note("接続が長く切れたため、ゲームが終了しました。もう一度はじめてください。", true); }
       else if(wantSearch && me.name){ send({t:"profile", name:me.name, g:me.g}); }
       return;
     case "profile_ok":
       me.name=m.name; me.g=m.g; store.set("fm-name",me.name); store.set("fm-g",me.g);
-      if(wantSearch){ wantSearch=false; send({t:"search"}); }
+      if(pendingAction) runPending();
+      else if(wantSearch){ wantSearch=false; send({t:"search"}); }
       return;
     case "error":
-      wantSearch=false;
+      wantSearch=false; pendingAction=null;
       if(screen!=="intro") show("intro");
       note(m.text, true); return;
     case "searching": startLobbyUI(); return;
+    case "hosting": showHosting(m.code); return;
+    case "room_info":
+      if(m.ok) showInvite(m.host);
+      else if(inviteCode){ note(m.reason==="busy"?"少し時間をおいて開き直してください":"招待の部屋が見つかりませんでした（閉じられたか、期限切れです）", true); clearInvite(); }
+      return;
+    case "room_error": show("intro"); note(m.text, true); return;
+    case "room_expired": if(screen==="hostScr"){ show("intro"); note("部屋の有効期限（30分）が切れました。もう一度作ってください", true); } return;
     case "stats": $("cntW").textContent = m.waiting; return;
     case "matched":
       partner = m.partner; V=null;
+      if(inviteCode) clearInvite();
       if(!m.resumed) sfx("match");
       if(!m.resumed){ $("log").textContent=""; sys("マッチングしました！まずは「よろしく」から始めよう 👋"); sys("連絡先の交換・出会い目的の利用は禁止です"); }
       else sys("再接続しました");
@@ -379,15 +451,46 @@ $("rulesBtn").onclick=()=>{
 };
 $("introForm").addEventListener("submit", e=>{
   e.preventDefault();
+  const action = (e.submitter && e.submitter.dataset.action) || $("startBtn").dataset.action || "search";
   const n = $("nameIn").value.trim().slice(0,12);
   if(!n) return;
   if(!["m","f","n"].includes(me.g)){ note("性別を選んでください（「ひみつ」も選べます）", true); return; }
   if(!$("ageIn").checked) return;
   me.name = n;
   if(!connected){ note("サーバーに接続しています…少し待ってからもう一度押してください", true); return; }
-  wantSearch = true;
-  send({t:"profile", name:me.name, g:me.g});
+  const go = (a)=>{ pendingAction=a; send({t:"profile", name:me.name, g:me.g}); };
+  if(action==="joinInvite") return go({join:inviteCode});
+  if(action==="host") return go("host");
+  if(action==="join"){
+    openDialog(`<div class="h">招待コードを入力</div><div class="sub">招待した人の画面に出ている6文字のコードです</div>
+      <form id="codeForm" style="display:flex;flex-direction:column;gap:10px"><input type="text" id="codeIn" class="codein" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" required>
+      <button type="submit">部屋に入る</button></form><button class="ghost" id="dCancel">キャンセル</button>`);
+    setTimeout(()=>$("codeIn").focus(),50);
+    $("codeForm").addEventListener("submit", ev=>{ ev.preventDefault(); const c=$("codeIn").value.toUpperCase().replace(/[^A-Z0-9]/g,""); if(c.length!==6){ $("codeIn").focus(); return; } closeDialog(); go({join:c}); });
+    $("dCancel").onclick=closeDialog;
+    return;
+  }
+  go("search");
 });
+
+/* ---------------- hosting (invite a friend) ---------------- */
+function showHosting(code){
+  show("hostScr");
+  const url = location.origin + location.pathname + "?room=" + code;
+  $("roomCode").textContent = code; $("roomLink").value = url;
+  $("hostMsg").textContent = "相手が入るのを待っています…（30分間有効）";
+  if(navigator.share) $("shareLink").classList.remove("hidden");
+}
+$("copyLink").onclick = async ()=>{
+  const v=$("roomLink").value;
+  try{ await navigator.clipboard.writeText(v); $("copyLink").textContent="コピーしました"; }
+  catch(e){ $("roomLink").select(); try{ document.execCommand("copy"); $("copyLink").textContent="コピーしました"; }catch(e2){} }
+  setTimeout(()=>{ $("copyLink").textContent="コピー"; }, 2000);
+};
+$("shareLink").onclick = ()=>{
+  navigator.share({ title:"ふたりミッション", text:`${me.name}さんから「ふたりミッション」の招待です。いっしょにゲームしよう！（招待コード: ${$("roomCode").textContent}）`, url:$("roomLink").value }).catch(()=>{});
+};
+$("hostCancel").onclick = ()=>{ send({t:"cancel"}); show("intro"); };
 
 /* ---------------- lobby ---------------- */
 function startLobbyUI(){

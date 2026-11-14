@@ -36,6 +36,9 @@ const CHAT_BURST = 5, CHAT_WINDOW_MS = 6_000;  // max 5 messages per 6s
 const ACT_BURST = 20, ACT_WINDOW_MS = 4_000;
 const REPORTS_TO_BAN = 3;            // distinct reporters within 24h → temporary ban
 const BAN_MS = 24 * 3600_000;
+const ROOM_TTL_MS = 30 * 60_000;     // an unused invite expires after 30 min
+const ROOM_LOOKUPS = 12, ROOM_LOOKUP_WINDOW_MS = 60_000; // code guesses per player per minute
+const ROOM_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L
 const PREFER_NEW_MS = 3 * 60_000;   // for 3 min, prefer someone new — but rematch if nobody else is waiting
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -60,11 +63,12 @@ const isBanned = (ipHash) => (bans.get(ipHash) || 0) > now();
 // ---------------------------------------------------------------- state
 const players = new Map();  // token -> player
 const queue = new Set();    // players waiting
+const rooms = new Map();    // code -> { code, host, created }  (private rooms for inviting a friend)
 const pairs = new Map();    // pairId -> pair
 const connsPerIp = new Map();
 
 /*
- player = { token, name, g, ws, ip, ipHash, state:'idle'|'wait'|'paired', pair, role,
+ player = { token, name, g, ws, ip, ipHash, state:'idle'|'wait'|'hosting'|'paired', pair, role, room,
             blocked:Set<token>, recent:Map<token,until>, chatTimes:[], actTimes:[], graceTimer }
  pair   = { id, a, b, S, log:[{role,text,ts}] }
 */
@@ -127,6 +131,26 @@ function makePair(a, b) {
   pushView(pair);
 }
 
+// ---------------------------------------------------------------- private rooms
+function newRoomCode() {
+  for (;;) {
+    let c = '';
+    const bytes = crypto.randomBytes(6);
+    for (const b of bytes) c += ROOM_ALPHABET[b % ROOM_ALPHABET.length];
+    if (!rooms.has(c)) return c;
+  }
+}
+const normCode = (c) => String(c || '').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+function closeRoom(p) {
+  if (p.room) { rooms.delete(p.room); p.room = null; }
+  if (p.state === 'hosting') p.state = 'idle';
+}
+setInterval(() => {
+  for (const r of rooms.values()) {
+    if (r.created + ROOM_TTL_MS < now()) { closeRoom(r.host); send(r.host, { t: 'room_expired' }); }
+  }
+}, 30_000);
+
 function endPair(pair, leaver, reason) {
   if (!pairs.has(pair.id)) return;
   pairs.delete(pair.id);
@@ -167,7 +191,36 @@ function onMessage(p, raw) {
     }
     case 'cancel': {
       if (p.state === 'wait') { queue.delete(p); p.state = 'idle'; }
+      if (p.state === 'hosting') closeRoom(p);
       return broadcastStats();
+    }
+    case 'host': {   // create a private room and get an invite code
+      if (!p.name) return send(p, { t: 'error', code: 'name', text: 'ニックネームを設定してください' });
+      if (p.state === 'hosting' && p.room) return send(p, { t: 'hosting', code: p.room });
+      if (p.state !== 'idle') return;
+      const code = newRoomCode();
+      rooms.set(code, { code, host: p, created: now() });
+      p.state = 'hosting'; p.room = code;
+      return send(p, { t: 'hosting', code });
+    }
+    case 'room_info': {   // who invited me? (works before choosing a nickname)
+      if (!rateOk(p.roomTimes || (p.roomTimes = []), ROOM_LOOKUPS, ROOM_LOOKUP_WINDOW_MS)) return send(p, { t: 'room_info', ok: false, reason: 'busy' });
+      const r = rooms.get(normCode(m.code));
+      if (!r || !r.host.ws || r.host.ws.closed || r.host === p) return send(p, { t: 'room_info', ok: false });
+      return send(p, { t: 'room_info', ok: true, code: r.code, host: r.host.name });
+    }
+    case 'join_room': {
+      if (!p.name) return send(p, { t: 'error', code: 'name', text: 'ニックネームを設定してください' });
+      if (p.state !== 'idle') return;
+      if (!rateOk(p.roomTimes || (p.roomTimes = []), ROOM_LOOKUPS, ROOM_LOOKUP_WINDOW_MS))
+        return send(p, { t: 'room_error', text: '試した回数が多すぎます。1分ほど待ってからもう一度どうぞ' });
+      const code = normCode(m.code);
+      const r = rooms.get(code);
+      if (!r || r.host === p || r.host.state !== 'hosting' || !r.host.ws || r.host.ws.closed || !canPair(r.host, p))
+        return send(p, { t: 'room_error', text: 'その部屋は見つかりませんでした。コードを確かめるか、招待した人にもう一度リンクを送ってもらってください' });
+      const host = r.host;
+      closeRoom(host);
+      return makePair(host, p);
     }
     case 'act': {
       if (p.state !== 'paired' || !p.pair) return;
@@ -191,6 +244,7 @@ function onMessage(p, raw) {
     }
     case 'leave': {
       if (p.state === 'wait') { queue.delete(p); p.state = 'idle'; }
+      if (p.state === 'hosting') closeRoom(p);
       if (p.pair) {
         const q = partnerOf(p);
         if (m.block && q) p.blocked.add(q.token);
@@ -273,6 +327,8 @@ function attach(ws, req, token) {
     send(q, { t: 'partner_back' });
   } else if (p.state === 'wait') {
     queue.add(p); send(p, { t: 'searching' });
+  } else if (p.state === 'hosting' && p.room) {
+    send(p, { t: 'hosting', code: p.room });
   }
 
   ws.on('message', (raw) => { try { onMessage(p, raw); } catch (e) { console.error('handler error', e); } });
@@ -285,6 +341,7 @@ function attach(ws, req, token) {
       if (p.ws !== ws) return;
       if (p.pair) endPair(p.pair, p, 'disconnected');
       if (p.state === 'wait') p.state = 'idle';
+      if (p.state === 'hosting') closeRoom(p);
       players.delete(p.token);
       broadcastStats();
     }, RECONNECT_GRACE_MS);
@@ -448,4 +505,4 @@ if (require.main === module) {
   server.listen(PORT, HOST, () => console.log(`ふたりミッション server: http://localhost:${PORT}`));
 }
 
-module.exports = { server, _state: { players, queue, pairs } };
+module.exports = { server, _state: { players, queue, pairs, rooms } };
