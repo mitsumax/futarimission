@@ -1,9 +1,9 @@
 'use strict';
-// Protocol / integration tests against a real server instance. Run: node test/protocol.js (Node >= 22)
+// Protocol / integration tests against a real server instance. Run: node test-protocol.js (Node >= 22)
 process.env.TRUST_PROXY = '1';
 process.env.DATA_DIR = require('path').join(require('os').tmpdir(), 'futari-test-' + Date.now());
 const assert = require('assert');
-const { server, _state } = require('../server');
+const { server, _state } = require('./server');
 
 let PORT;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -130,10 +130,11 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     A.ws.close();
   });
 
-  await t('static files served; path traversal blocked', async () => {
+  await t('index served; server code never served', async () => {
     const r = await fetch(`http://127.0.0.1:${PORT}/`); assert.strictEqual(r.status, 200);
     assert.ok((await r.text()).includes('ふたり'));
-    const r2 = await fetch(`http://127.0.0.1:${PORT}/%2e%2e/server.js`); assert.ok([403, 404].includes(r2.status));
+    const r2 = await fetch(`http://127.0.0.1:${PORT}/server.js`); assert.strictEqual(r2.status, 404);
+    const r4 = await fetch(`http://127.0.0.1:${PORT}/%2e%2e/server.js`); assert.ok([403, 404].includes(r4.status));
     const r3 = await fetch(`http://127.0.0.1:${PORT}/healthz`); assert.strictEqual(r3.status, 200);
   });
 

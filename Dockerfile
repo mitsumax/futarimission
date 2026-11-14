@@ -1,8 +1,6 @@
 FROM node:22-alpine
 WORKDIR /app
-COPY package.json server.js ./
-COPY lib ./lib
-COPY public ./public
+COPY package.json server.js ws.js games.js filter.js index.html favicon.svg ./
 RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 ENV PORT=3000 NODE_ENV=production

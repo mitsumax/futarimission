@@ -62,7 +62,7 @@ VPS で nginx を前に置く場合は、`/ws` に WebSocket のアップグレ�
 
 | 仕組み | 内容 |
 |---|---|
-| 連絡先ブロック | 電話番号、メールアドレス、URL、@ID、LINE・インスタ・Discord などを含む発言は送れない（`lib/filter.js` で調整） |
+| 連絡先ブロック | 電話番号、メールアドレス、URL、@ID、LINE・インスタ・Discord などを含む発言は送れない（`filter.js` で調整） |
 | NG ワード | 悪口などをブロック。**性的な語や差別語は、運営方針に合わせて `NG_WORDS` に追加してください** |
 | 連投制限 | 6 秒間に 5 通まで |
 | ブロック | ブロックした相手とは二度とマッチングしない（同じブラウザのタブを開いている間） |
@@ -88,22 +88,28 @@ curl -H "x-admin-token: $ADMIN_TOKEN" https://<ドメイン>/admin/reports   # �
 - [ ] 利用規約・プライバシーポリシーのページを作る（通報時に会話を記録することを明記する）
 - [ ] 利用できる年齢の下限を決め、規約と画面に書く（未成年の利用を想定するなら、保護者の同意の扱いも）
 - [ ] 運営者への問い合わせ窓口を用意する
-- [ ] `lib/filter.js` の NG ワードを運営方針に合わせて追加する
+- [ ] `filter.js` の NG ワードを運営方針に合わせて追加する
 - [ ] 念のため、管轄の警察署（生活安全課）に「出会い目的ではない協力ゲーム」として事前相談する
 - [ ] `HASH_SALT` と `ADMIN_TOKEN` を設定する
 
 ## 6. ファイル構成
 
+フォルダを使わず、全ファイルを1か所に並べています。GitHubへは、全ファイルを選んでドラッグするだけでアップロードできます。
+
 ```
 server.js          HTTP・WebSocket・マッチング・ペア管理・通報/BAN
-lib/ws.js          依存なしの WebSocket 実装（RFC 6455）
-lib/games.js       ゲームのルールと「役割ごとに見せる情報」の切り分け
-lib/filter.js      連絡先・NG ワード・ニックネームのフィルター
-public/index.html  画面（スマホ/PC 共通・1 ファイル）
-test/              ユニットテスト・通信テスト
+ws.js              依存なしの WebSocket 実装（RFC 6455）
+games.js           ゲームのルールと「役割ごとに見せる情報」の切り分け
+filter.js          連絡先・NG ワード・ニックネームのフィルター
+index.html         画面（スマホ/PC 共通・1 ファイル）
+favicon.svg        アイコン
+test-unit.js       ユニットテスト
+test-protocol.js   通信テスト
 ```
 
+外部に公開されるのは index.html と favicon.svg だけです。server.js などのプログラムは、ブラウザから見えません。
+
 ### ゲームを増やすには
-1. `lib/games.js` の `startGame` に初期状態、`apply` に操作の処理、`view` に役割ごとの見せ方を書く
+1. `games.js` の `startGame` に初期状態、`apply` に操作の処理、`view` に役割ごとの見せ方を書く
 2. `GAME_IDS` に ID を追加する
-3. `public/index.html` の `GAMES` に名前と説明を追加し、`renderStage` に描画処理を書く
+3. `index.html` の `GAMES` に名前と説明を追加し、`renderStage` に描画処理を書く

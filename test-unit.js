@@ -1,8 +1,8 @@
 'use strict';
-// Unit tests: game rules, information hiding, filters.  Run: node test/unit.js
+// Unit tests: game rules, information hiding, filters.  Run: node test-unit.js
 const assert = require('assert');
-const games = require('../lib/games');
-const { checkChat, cleanName } = require('../lib/filter');
+const games = require('./games');
+const { checkChat, cleanName } = require('./filter');
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('  ✓', name); };
