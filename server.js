@@ -30,7 +30,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) =
 const HASH_SALT = process.env.HASH_SALT || crypto.randomBytes(16).toString('hex');
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const MIN_AGE = Math.max(0, Math.min(99, parseInt(process.env.MIN_AGE, 10) || 18));
-const CONTACT_EMAIL = (process.env.CONTACT_EMAIL || '').trim();
+const CONTACT_EMAIL = (process.env.CONTACT_EMAIL || 'postmaster@futarimission.sakura.ne.jp').trim();
 const OPERATOR_NAME = (process.env.OPERATOR_NAME || 'ふたりミッション運営者').trim();
 const POLICY_UPDATED = process.env.POLICY_UPDATED || '2026年11月14日';
 const REPORT_RETENTION_DAYS = 180;
@@ -546,7 +546,6 @@ server.on('upgrade', (req, socket) => {
 if (require.main === module) {
   server.listen(PORT, HOST, () => {
     console.log(`ふたりミッション server: http://localhost:${PORT}`);
-    if (!CONTACT_EMAIL) console.warn('⚠️  CONTACT_EMAIL が未設定です。利用規約・プライバシーポリシーの問い合わせ先が「準備中」と表示されます。');
     if (!process.env.HASH_SALT) console.warn('⚠️  HASH_SALT が未設定です。再起動のたびに利用停止の記録が引き継がれなくなります。');
   });
 }

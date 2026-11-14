@@ -68,7 +68,7 @@ VPS で nginx を前に置く場合は、`/ws` に WebSocket のアップグレ�
 | `DATA_DIR` | 通報ログ・BAN リストの保存先 | `./data` |
 | `MAX_CONN_PER_IP` | 1 つの IP からの同時接続の上限 | 30 |
 | `MIN_AGE` | 利用できる年齢の下限。トップ画面・利用規約・プライバシーポリシーに表示される | 18 |
-| `CONTACT_EMAIL` | 利用規約・プライバシーポリシーに載せる問い合わせ先。**公開前に必ず設定**（未設定だと「準備中」と表示） | なし |
+| `CONTACT_EMAIL` | 利用規約・プライバシーポリシーに載せる問い合わせ先（Renderで設定するとそちらが優先） | postmaster@futarimission.sakura.ne.jp |
 | `OPERATOR_NAME` | 規約に載せる運営者名 | ふたりミッション運営者 |
 | `POLICY_UPDATED` | 規約の「最終更新日」 | 2026年11月14日 |
 
@@ -103,7 +103,7 @@ VPS で nginx を前に置く場合は、`/ws` に WebSocket のアップグレ�
 ## 5. 公開前のチェックリスト
 
 - [x] 利用規約・プライバシーポリシーのページ（`/terms`・`/privacy`。非営利・年齢・禁止事項・通報時の会話記録・問い合わせ先を記載）
-- [ ] `CONTACT_EMAIL` を設定する
+- [x] 問い合わせ先（postmaster@futarimission.sakura.ne.jp）
 - [x] 利用できる年齢の下限（`MIN_AGE`、初期値18歳）
 - [ ] 運営者への問い合わせ窓口を用意する
 - [ ] `filter.js` の NG ワードを運営方針に合わせて追加する
