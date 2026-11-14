@@ -14,6 +14,7 @@
  *   STORE_URL         URL of php-store/store.php on a rental server (e.g. Core Server) — when set with STORE_TOKEN, records are saved there
  *   STORE_PROVIDER    where those records are kept, shown in the privacy policy (default: GMOデジロック「コアサーバー」)
  *   STORE_TOKEN       shared secret, the same value written in store.php
+ *   PUBLIC_URL        public address used in link previews and share buttons (default https://futarimission.com)
  *   MIN_AGE           minimum age shown in the terms and on the start screen (default 18)
  *   CONTACT_EMAIL     contact address shown in the terms / privacy policy
  *   OPERATOR_NAME     operator name shown in the terms / privacy policy
@@ -386,12 +387,14 @@ const SEC_HEADERS = {
 
 // Only these files are public. Everything else in the folder (server code, data) is never served.
 const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/favicon.svg': 'favicon.svg', '/admin': 'admin.html',
-  '/terms': 'terms.html', '/privacy': 'privacy.html' };
+  '/terms': 'terms.html', '/privacy': 'privacy.html', '/og.png': 'og.png' };
 
 // {{PLACEHOLDERS}} in the HTML pages are filled from environment variables (HTML-escaped)
 const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const STORE_PROVIDER = (process.env.STORE_PROVIDER || 'GMOデジロック株式会社が提供するレンタルサーバー「コアサーバー」（日本国内）').trim();
+const PUBLIC_URL = (process.env.PUBLIC_URL || 'https://futarimission.com').replace(/\/+$/, '');
 const PAGE_VARS = {
+  PUBLIC_URL,
   STORAGE_NOTE: process.env.STORE_URL && process.env.STORE_TOKEN
     ? `通報の記録、利用停止の記録、対応済みの印は、${STORE_PROVIDER}に保存します。`
     : '通報の記録、利用停止の記録、対応済みの印は、上記のクラウドサーバー上に保存します。',

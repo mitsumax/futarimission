@@ -316,6 +316,13 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     assert.ok(terms.includes('help&lt;x&gt;@example.com') && !terms.includes('help<x>'), 'contact is escaped');
     assert.ok(privacy.includes('Cookieは使いません') && privacy.includes('help&lt;x&gt;@example.com'));
     assert.ok(index.includes('16歳以上です') && index.includes('href="/terms"') && index.includes('href="/privacy"'));
+    // link previews: absolute image URL, large card, and the image itself is served
+    assert.ok(index.includes('<meta property="og:image" content="https://futarimission.com/og.png">'));
+    assert.ok(index.includes('<meta name="twitter:card" content="summary_large_image">'));
+    assert.ok(index.includes('const SHARE_URL = "https://futarimission.com";'));
+    const og = await fetch(`http://127.0.0.1:${PORT}/og.png`);
+    assert.strictEqual(og.status, 200); assert.strictEqual(og.headers.get('content-type'), 'image/png');
+    assert.ok((await og.arrayBuffer()).byteLength > 10000);
   });
 
   await t('reports older than 180 days are deleted automatically', async () => {

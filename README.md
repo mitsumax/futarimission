@@ -67,6 +67,7 @@ VPS で nginx を前に置く場合は、`/ws` に WebSocket のアップグレ�
 | `ALLOWED_ORIGINS` | `/ws` への接続を許可するオリジン（カンマ区切り）。未設定なら同じホストからの接続だけ許可 | なし |
 | `DATA_DIR` | 通報ログ・BAN リストの保存先 | `./data` |
 | `MAX_CONN_PER_IP` | 1 つの IP からの同時接続の上限 | 30 |
+| `PUBLIC_URL` | リンクの見た目（OGP）とシェアボタンに使う公開アドレス | https://futarimission.com |
 | `MIN_AGE` | 利用できる年齢の下限。トップ画面・利用規約・プライバシーポリシーに表示される | 18 |
 | `CONTACT_EMAIL` | 利用規約・プライバシーポリシーに載せる問い合わせ先（Renderで設定するとそちらが優先） | postmaster@futarimission.sakura.ne.jp |
 | `OPERATOR_NAME` | 規約に載せる運営者名 | ふたりミッション運営者 |
