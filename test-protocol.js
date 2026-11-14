@@ -94,6 +94,30 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     A2.ws.close(); B.ws.close(); await sleep(50);
   });
 
+
+  await t('without a block, the same two people (same IP) re-match right away', async () => {
+    const { A, B } = await joinAndMatch('10.2.0.1', '10.2.0.1');
+    A.send({ t: 'leave' }); await B.next('partner_left');
+    A.send({ t: 'search' }); B.send({ t: 'search' });
+    assert.strictEqual((await A.next('matched', 4000)).partner.name, 'はなこ');
+    await B.next('matched');
+    A.ws.close(); B.ws.close(); await sleep(50);
+  });
+
+  await t('someone new is preferred over the previous partner when both are waiting', async () => {
+    const { A, B } = await joinAndMatch('10.2.1.1', '10.2.1.2');
+    A.send({ t: 'leave' }); await B.next('partner_left');
+    const C = await client('10.2.1.3'); await C.next('hello');
+    C.send({ t: 'profile', name: 'あたらしい', g: 'n' }); await C.next('profile_ok');
+    C.send({ t: 'search' }); A.send({ t: 'search' }); B.send({ t: 'search' });
+    const mC = await C.next('matched', 4000);
+    assert.ok(['たろう', 'はなこ'].includes(mC.partner.name), 'newcomer is matched instead of the old pair re-matching');
+    await sleep(300);
+    const oldPairRematched = A.inbox.some((m) => m.t === 'matched' && m.partner.name === 'はなこ');
+    assert.ok(!oldPairRematched);
+    A.ws.close(); B.ws.close(); C.ws.close(); await sleep(50);
+  });
+
   await t('leave with block → never re-matched with that person', async () => {
     const { A, B } = await joinAndMatch('10.0.5.1', '10.0.5.2');
     A.send({ t: 'leave', block: true }); await B.next('partner_left');

@@ -36,7 +36,7 @@ const CHAT_BURST = 5, CHAT_WINDOW_MS = 6_000;  // max 5 messages per 6s
 const ACT_BURST = 20, ACT_WINDOW_MS = 4_000;
 const REPORTS_TO_BAN = 3;            // distinct reporters within 24h → temporary ban
 const BAN_MS = 24 * 3600_000;
-const AVOID_REMATCH_MS = 3 * 60_000; // don't re-pair the same two people right away
+const PREFER_NEW_MS = 3 * 60_000;   // for 3 min, prefer someone new — but rematch if nobody else is waiting
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const STAMPS = ['fun', 'team', 'thanks', 'again'];
@@ -85,19 +85,21 @@ function broadcastStats() {
 }
 
 // ---------------------------------------------------------------- matching (gender-blind, random)
+// Only a block prevents a match. Same IP / same Wi-Fi / previous partner are all allowed.
 function canPair(x, y) {
   if (x === y) return false;
   if (x.blocked.has(y.token) || y.blocked.has(x.token)) return false;
-  if ((x.recent.get(y.token) || 0) > now() || (y.recent.get(x.token) || 0) > now()) return false;
   return true;
 }
+const playedRecently = (x, y) => (x.recent.get(y.token) || 0) > now() || (y.recent.get(x.token) || 0) > now();
 function runMatcher() {
   const waiting = [...queue].filter((p) => p.ws && !p.ws.closed);
   for (let i = waiting.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [waiting[i], waiting[j]] = [waiting[j], waiting[i]]; }
   const used = new Set();
   for (const x of waiting) {
     if (used.has(x)) continue;
-    const y = waiting.find((c) => !used.has(c) && canPair(x, c));
+    const free = waiting.filter((c) => !used.has(c) && canPair(x, c));
+    const y = free.find((c) => !playedRecently(x, c)) || free[0];   // someone new first, else the previous partner
     if (!y) continue;
     used.add(x); used.add(y);
     makePair(x, y);
@@ -130,7 +132,7 @@ function endPair(pair, leaver, reason) {
   pairs.delete(pair.id);
   for (const p of [pair.a, pair.b]) {
     const q = p === pair.a ? pair.b : pair.a;
-    p.recent.set(q.token, now() + AVOID_REMATCH_MS);
+    p.recent.set(q.token, now() + PREFER_NEW_MS);
     p.pair = null; p.role = null; p.state = 'idle';
     if (p !== leaver) send(p, { t: 'partner_left', reason });
   }
