@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>管理画面 — ふたりミッション</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#f7f3f1;--panel:#fff;--ink:#2e2524;--muted:#8d7d78;--line:#eadfda;--coral:#f0675a;--teal:#2f9c8f;--warn:#c2410c;--ok:#15803d}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1716;--panel:#272120;--ink:#f3e9e6;--muted:#ad9d97;--line:#3d3331}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header h1{font-size:16px;margin:0}
+header .sp{flex:1}
+main{max-width:1100px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:20px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 12px;font-weight:600}
+button.primary{background:var(--coral);border-color:var(--coral);color:#fff}
+button.danger{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .v{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.tile .l{color:var(--muted);font-size:12px}
+h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;color:var(--muted);font-size:13px}
+.report{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:10px}
+.report.handled{opacity:.55}
+.report .meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px}
+.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}
+.badge.ban{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);border-color:transparent}
+.badge.ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok);border-color:transparent}
+.reason{font-weight:700;margin:6px 0}
+.actions{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:150px}
+details{grid-column:1/-1}
+summary{cursor:pointer;color:var(--muted);font-size:13px}
+.log{margin-top:8px;display:flex;flex-direction:column;gap:4px;max-height:320px;overflow:auto;background:var(--bg);border-radius:8px;padding:10px}
+.line{display:flex;gap:8px;font-size:13px;line-height:1.5}
+.line .who{flex:none;width:56px;font-weight:700;font-size:11px;padding-top:2px}
+.line .who.reported{color:var(--warn)} .line .who.reporter{color:var(--teal)}
+.line .tm{flex:none;color:var(--muted);font-size:11px;padding-top:2px;font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:30px;background:var(--panel);border:1px dashed var(--line);border-radius:12px}
+#login{max-width:380px;margin:12vh auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:12px}
+#login p{margin:0;color:var(--muted);line-height:1.6;font-size:13px}
+.err{color:var(--warn);font-size:13px;min-height:18px}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+td,th{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+th{color:var(--muted);font-weight:600;font-size:12px}
+.hidden{display:none!important}
+@media (max-width:640px){.report{grid-template-columns:1fr}.actions{flex-direction:row;flex-wrap:wrap}}
+</style>
+</head>
+<body>
+
+<form id="login">
+  <h1 style="margin:0;font-size:18px">管理画面</h1>
+  <p>Render の環境変数に設定した <b>ADMIN_TOKEN</b> を入力してください。このタブを閉じるまで記憶されます。</p>
+  <input type="password" id="tok" placeholder="ADMIN_TOKEN" autocomplete="current-password" required>
+  <div class="err" id="loginErr"></div>
+  <button class="primary" type="submit">ログイン</button>
+</form>
+
+<div id="app" class="hidden">
+  <header>
+    <h1>ふたりミッション 管理画面</h1>
+    <span class="mono" id="updated"></span>
+    <div class="sp"></div>
+    <button id="refresh" type="button">更新</button>
+    <button id="logout" type="button">ログアウト</button>
+  </header>
+  <main>
+    <section class="tiles" id="tiles"></section>
+
+    <section>
+      <h2>通報</h2>
+      <div class="bar">
+        <label><input type="checkbox" id="showHandled"> 対応済みも表示</label>
+        <span id="repCount"></span>
+      </div>
+      <div id="reports"></div>
+    </section>
+
+    <section>
+      <h2>利用停止中</h2>
+      <div id="bans"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+let token = ""; try { token = sessionStorage.getItem("fm-admin") || ""; } catch (e) {}
+let reports = [];
+
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k.nodeType ? k : String(k));   // text only: never innerHTML for user content
+  return e;
+}
+const fmt = (t) => new Date(t).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const fmtTime = (t) => new Date(t).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+async function api(path, body) {
+  const r = await fetch("/admin/api/" + path, {
+    method: body ? "POST" : "GET",
+    headers: { "x-admin-token": token, ...(body ? { "content-type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 401) { logout("トークンが違います（または ADMIN_TOKEN が未設定です）"); throw new Error("401"); }
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+
+function logout(msg) {
+  token = ""; try { sessionStorage.removeItem("fm-admin"); } catch (e) {}
+  $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  $("loginErr").textContent = msg || "";
+}
+
+$("login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  token = $("tok").value.trim();
+  try { await api("stats"); } catch (err) { return; }
+  try { sessionStorage.setItem("fm-admin", token); } catch (e2) {}
+  start();
+});
+$("logout").onclick = () => logout();
+$("refresh").onclick = () => load();
+$("showHandled").onchange = () => renderReports();
+
+async function load() {
+  try {
+    const [stats, reps, bans] = await Promise.all([api("stats"), api("reports?limit=300"), api("bans")]);
+    renderStats(stats); reports = reps; renderReports(); renderBans(bans);
+    $("updated").textContent = "最終更新 " + fmtTime(Date.now());
+  } catch (e) { /* shown via logout or ignored */ }
+}
+
+function renderStats(s) {
+  const t = $("tiles"); t.textContent = "";
+  const items = [["いま接続中", s.online], ["相手を探し中", s.waiting], ["遊んでいるペア", s.pairs], ["24時間の通報", s.reportsToday], ["利用停止中", s.bans],
+    ["稼働時間", s.uptimeSec > 3600 ? Math.floor(s.uptimeSec / 3600) + "時間" : Math.floor(s.uptimeSec / 60) + "分"]];
+  for (const [l, v] of items) t.append(el("div", { class: "tile" }, el("div", { class: "v" }, v), el("div", { class: "l" }, l)));
+}
+
+function renderReports() {
+  const box = $("reports"); box.textContent = "";
+  const show = $("showHandled").checked ? reports : reports.filter((r) => !r.handled);
+  $("repCount").textContent = `未対応 ${reports.filter((r) => !r.handled).length}件 / 全${reports.length}件（新しい順）`;
+  if (!show.length) { box.append(el("div", { class: "empty" }, reports.length ? "未対応の通報はありません 🎉" : "通報はまだありません")); return; }
+  for (const r of show) {
+    const badges = el("div", { class: "meta" },
+      el("b", {}, fmt(r.ts)),
+      el("span", {}, "通報された人: "), el("b", {}, r.reportedName || "（名前なし）"),
+      r.bannedUntil ? el("span", { class: "badge ban" }, "停止中（" + fmt(r.bannedUntil) + "まで）") : null,
+      r.reportsAgainst > 1 ? el("span", { class: "badge ban" }, "24h内の通報 " + r.reportsAgainst + "件") : null,
+      r.handled ? el("span", { class: "badge ok" }, "対応済み") : null,
+    );
+    const log = el("div", { class: "log" });
+    if (!r.log || !r.log.length) log.append(el("div", { class: "mono" }, "会話はありませんでした"));
+    else for (const l of r.log) log.append(el("div", { class: "line" },
+      el("span", { class: "who " + l.who }, l.who === "reported" ? "通報対象" : "通報者"),
+      el("span", { class: "tm" }, fmtTime(l.ts)),
+      el("span", {}, l.text)));
+    const actions = el("div", { class: "actions" },
+      r.bannedUntil
+        ? el("button", { type: "button", onclick: () => act("unban", { ipHash: r.reportedIp }, "利用停止を解除しますか？") }, "停止を解除")
+        : el("button", { type: "button", class: "danger", onclick: () => act("ban", { ipHash: r.reportedIp, hours: 24 }, "この利用者を24時間停止しますか？") }, "24時間停止"),
+      r.bannedUntil ? null : el("button", { type: "button", class: "danger", onclick: () => act("ban", { ipHash: r.reportedIp, hours: 24 * 30 }, "この利用者を30日間停止しますか？") }, "30日停止"),
+      el("button", { type: "button", onclick: () => act("handled", { id: r.id, handled: !r.handled }) }, r.handled ? "未対応に戻す" : "対応済みにする"),
+    );
+    box.append(el("div", { class: "report" + (r.handled ? " handled" : "") },
+      el("div", {}, badges, el("div", { class: "reason" }, "理由: " + (r.reason || "（なし）")),
+        el("div", { class: "mono" }, "利用者ID(ハッシュ): " + r.reportedIp)),
+      actions,
+      el("details", {}, el("summary", {}, `通報時の会話（${(r.log || []).length}件）を見る`), log)));
+  }
+}
+
+function renderBans(list) {
+  const box = $("bans"); box.textContent = "";
+  if (!list.length) { box.append(el("div", { class: "empty" }, "利用停止中の人はいません")); return; }
+  const tb = el("tbody");
+  for (const b of list.sort((x, y) => x.until - y.until)) tb.append(el("tr", {},
+    el("td", { class: "mono" }, b.ipHash), el("td", {}, fmt(b.until) + " まで"),
+    el("td", {}, el("button", { type: "button", onclick: () => act("unban", { ipHash: b.ipHash }, "利用停止を解除しますか？") }, "解除"))));
+  box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "利用者ID(ハッシュ)"), el("th", {}, "期限"), el("th", {}, ""))), tb));
+}
+
+async function act(path, body, confirmText) {
+  if (confirmText && !window.confirm(confirmText)) return;
+  try { await api(path, body); } catch (e) { return; }
+  load();
+}
+
+let timer = null;
+function start() {
+  $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+  load(); clearInterval(timer); timer = setInterval(load, 15000);
+}
+if (token) start();
+})();
+</script>
+</body>
+</html>

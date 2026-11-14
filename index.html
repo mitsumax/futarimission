@@ -102,7 +102,50 @@ input[type=text]:focus{border-color:var(--coral)}
 .h{font-size:18px;font-weight:800;margin:0}
 .sub{font-size:13px;color:var(--muted);line-height:1.6}
 .role{display:inline-block;font-size:12px;font-weight:800;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal)}
-.gamegrid{display:grid;gap:10px}
+.gamegrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+/* draw */
+.drawwrap{position:relative;width:100%;max-width:440px;margin:0 auto;aspect-ratio:1;border-radius:16px;overflow:hidden;background:#fff;border:1.5px solid var(--line);touch-action:none}
+.drawwrap canvas{position:absolute;inset:0;width:100%;height:100%}
+.palette{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center}
+.palette .sw{width:30px;height:30px;border-radius:50%;padding:0;border:3px solid transparent;box-shadow:0 0 0 1px var(--line)}
+.palette .sw.sel{border-color:var(--ink)}
+.palette .tool{padding:6px 10px;font-size:12px;background:var(--bg);color:var(--ink);border:1.5px solid var(--line)}
+.palette .tool.sel{border-color:var(--ink)}
+.timer{font-variant-numeric:tabular-nums;font-weight:800}
+.timer.low{color:var(--coral)}
+.word{font-size:26px;font-weight:800;text-align:center;letter-spacing:.05em}
+.guessrow{display:flex;gap:8px}
+.guessrow input{flex:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;min-height:24px}
+.chip{font-size:12px;padding:3px 10px;border-radius:99px;background:var(--bg);border:1px solid var(--line);color:var(--muted);text-decoration:line-through}
+/* puzzle */
+.pz{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;max-width:300px;margin:0 auto}
+.pz .cell{aspect-ratio:1;border-radius:12px;background:var(--bg);border:2px dashed var(--line);font-size:34px;display:flex;align-items:center;justify-content:center;padding:0;color:var(--ink)}
+.pz .cell.mine{border-style:solid;border-color:var(--coral);background:color-mix(in srgb,var(--coral) 10%,transparent)}
+.pz .cell.theirs{border-style:solid;border-color:var(--teal);background:color-mix(in srgb,var(--teal) 10%,transparent)}
+.pz .cell.target{border-style:solid}
+.hand{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.hand button{font-size:30px;width:58px;height:58px;padding:0;border-radius:14px;background:var(--bg);border:2px solid var(--line)}
+.hand button.sel{border-color:var(--coral);transform:translateY(-4px)}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:132px;margin:0 auto}
+.mini div{aspect-ratio:1;border-radius:6px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:20px}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+@media (max-width:520px){.twocol{grid-template-columns:1.25fr 1fr;gap:8px}.pz{gap:4px}.pz .cell{font-size:24px;border-radius:9px}.mini{width:100%;max-width:120px}.mini div{font-size:16px}.hand button{width:50px;height:50px;font-size:26px}}
+/* ten */
+.cards{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.ncard{width:54px;height:76px;border-radius:12px;font-size:28px;font-weight:800;display:flex;align-items:center;justify-content:center;background:var(--panel);border:2px solid var(--line);color:var(--ink);padding:0}
+.ncard.sel{border-color:var(--coral);background:color-mix(in srgb,var(--coral) 12%,transparent);transform:translateY(-6px)}
+.ncard.back{background:repeating-linear-gradient(45deg,var(--coral2),var(--coral2) 6px,var(--coral) 6px,var(--coral) 12px);border-color:transparent;color:transparent}
+.target{font-size:44px;font-weight:800;text-align:center;color:var(--coral);line-height:1}
+/* stamps */
+.stamps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stamps button{background:var(--bg);color:var(--ink);border:1.5px solid var(--line);font-size:14px;padding:10px 6px}
+.stamp-pop{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:60;background:var(--panel);border:2px solid var(--coral);border-radius:24px;padding:18px 26px;text-align:center;box-shadow:0 18px 40px rgba(0,0,0,.18);animation:pop 2.2s ease forwards;pointer-events:none}
+.stamp-pop .e{font-size:56px;line-height:1.1}
+.stamp-pop .t{font-weight:800;font-size:18px;margin-top:4px}
+.stamp-pop .f{font-size:12px;color:var(--muted)}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}20%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-62%) scale(.96)}}
+#soundBtn{padding:7px 9px;font-size:15px}
 .gamecard{display:flex;gap:12px;align-items:center;text-align:left;background:var(--panel);color:var(--ink);border:1.5px solid var(--line);border-radius:18px;padding:14px}
 .gamecard .ic{font-size:32px;width:52px;height:52px;border-radius:14px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex:none}
 .gamecard b{display:block;font-size:16px}
@@ -191,6 +234,7 @@ input[type=text]:focus{border-color:var(--coral)}
       <div style="min-width:0"><div class="nm" id="pName">…</div><div class="sub" id="pSub">相手</div></div>
     </div>
     <div class="bond" title="一緒にクリアするほど貯まります"><span class="bl">仲良し度</span><div class="bondbar"><i id="bondFill"></i></div><b id="bondLv">Lv1</b></div>
+    <button class="ghost" id="soundBtn" type="button" title="効果音のオン/オフ">🔊</button>
     <button class="ghost" id="leaveBtn" type="button">退出</button>
   </div>
   <div class="stage"><div class="stage-inner" id="stage"></div></div>
@@ -220,7 +264,11 @@ const GAMES = {
   kokoro:{ic:"💞",name:"以心伝心",desc:"同じ質問にふたりで答えて、6問中4問そろえばクリア。選んだあとに理由を話してみよう。"},
   lock:  {ic:"🔐",name:"記号ロック",desc:"片方だけに暗号が見える。言葉で伝えて、もう片方が入力。3つのロックを解除しよう。"},
   maze:  {ic:"🌫️",name:"霧の迷路",desc:"地図が見えるナビ役と、まわりしか見えない探検役。声かけだけでゴールを目指そう。"},
+  draw:  {ic:"🎨",name:"お絵かき伝言",desc:"片方がお題を絵で描いて、もう片方が当てる。80秒で3問中2問正解すればクリア。"},
+  puzzle:{ic:"🧩",name:"ふたりパズル",desc:"自分のピースの正しい場所は相手にしか見えない。教え合って9マスを完成させよう。"},
+  ten:   {ic:"🃏",name:"合わせて○○",desc:"お互いのカードは見えない。数字を言わずにヒントだけで、合計をぴったり目標に。"},
 };
+const STAMPS = { fun:["🎉","たのしかった！"], team:["🤝","ナイスチーム！"], thanks:["🙏","ありがとう！"], again:["🔁","またあそぼ！"] };
 const QUICK = ["よろしくね！","ナイス！👏","ごめん🙏","ありがとう！","どれにする？","😊","🤣","👍"];
 
 /* ---------------- state ---------------- */
@@ -275,16 +323,21 @@ function onMsg(m){
     case "stats": $("cntW").textContent = m.waiting; return;
     case "matched":
       partner = m.partner; V=null;
+      if(!m.resumed) sfx("match");
       if(!m.resumed){ $("log").textContent=""; sys("マッチングしました！まずは「よろしく」から始めよう 👋"); sys("連絡先の交換・出会い目的の利用は禁止です"); }
       else sys("再接続しました");
       renderTop(); renderStage(); show("playScr"); return;
     case "view":
-      V = m.view;
-      if(V.result && V.result.id!==lastResultId){ lastResultId=V.result.id; if(V.result.clear) confetti(); }
+      V = m.view; V._at = performance.now();
+      if(V.result && V.result.id!==lastResultId){ lastResultId=V.result.id; sfx(V.result.clear?"clear":"fail"); if(V.result.clear) confetti(); }
       renderTop(); renderStage(); return;
-    case "sys": sys(m.text); return;
-    case "chat": addMsg(m.text, m.from==="me", m.ts); return;
-    case "chat_rejected": sys("🚫 "+m.text); return;
+    case "sys":
+      sys(m.text);
+      if(/^[❌💥⏰🏳️]/u.test(m.text)) sfx("bad"); else if(/^[⭕🔓]/u.test(m.text)) sfx("good"); else if(/^🧩/u.test(m.text)) sfx("tap");
+      return;
+    case "chat": addMsg(m.text, m.from==="me", m.ts); if(m.from!=="me") sfx("msg"); return;
+    case "chat_rejected": sys("🚫 "+m.text); sfx("bad"); return;
+    case "stamp": showStamp(m.id, m.from==="me"); return;
     case "partner_away": sys(`${partner?partner.name:"相手"} さんの接続が不安定です…少し待ってね`); $("pSub").textContent="接続待ち…"; return;
     case "partner_back": sys(`${partner?partner.name:"相手"} さんが戻ってきました`); renderTop(); return;
     case "partner_left": {
@@ -347,11 +400,13 @@ $("cancelBtn").onclick=()=>{ send({t:"cancel"}); show("intro"); };
 /* ---------------- play: leave / report ---------------- */
 $("leaveBtn").onclick=()=>{
   openDialog(`<div class="h">退出しますか？</div><div class="sub">相手との接続が切れます。</div>
-    <button id="dLeave">退出して新しい相手を探す</button>
+    <button id="dFun">🎉「たのしかった！」を送って退出</button>
+    <button class="soft" id="dLeave">そのまま退出して新しい相手を探す</button>
     <button class="soft" id="dBlock">ブロックして退出</button>
     <button class="soft" id="dReport" style="color:var(--coral)">通報して退出</button>
     <button class="ghost" id="dCancel">キャンセル</button>`);
   $("dLeave").onclick=()=>{ closeDialog(); send({t:"leave"}); send({t:"search"}); };
+  $("dFun").onclick=()=>{ closeDialog(); send({t:"stamp", id:"fun"}); setTimeout(()=>{ send({t:"leave"}); send({t:"search"}); }, 600); };
   $("dBlock").onclick=()=>{ closeDialog(); send({t:"leave", block:true}); send({t:"search"}); };
   $("dReport").onclick=reportDialog;
   $("dCancel").onclick=closeDialog;
@@ -376,7 +431,7 @@ function renderTop(){
   $("bondLv").textContent = "Lv" + (1+Math.floor(b/50));
   $("bondFill").style.width = ((b%50)/50*100)+"%";
 }
-function act(a){ send({t:"act", a}); }
+function act(a){ send({t:"act", a}); if(a.type!=="stroke") sfx("tap"); }
 function glyph(id){
   const shape=id%4, mark=Math.floor(id/4), c="currentColor"; let s="";
   if(shape===0) s=`<circle cx="20" cy="20" r="16" fill="none" stroke="${c}" stroke-width="3"/>`;
@@ -391,12 +446,16 @@ function glyph(id){
 }
 function renderStage(){
   const st=$("stage");
+  if(!(V && V.phase==="play" && V.game==="draw")) st.dataset.draw="";
   if(!V){ st.innerHTML=`<div class="card center"><div class="big">⏳</div><div class="sub">準備中…</div></div>`; return; }
   if(V.phase==="select") return renderSelect(st);
   if(V.phase==="result") return renderResult(st);
   if(V.game==="kokoro") return renderKokoro(st);
   if(V.game==="lock") return renderLock(st);
   if(V.game==="maze") return renderMaze(st);
+  if(V.game==="draw") return renderDraw(st);
+  if(V.game==="puzzle") return renderPuzzle(st);
+  if(V.game==="ten") return renderTen(st);
 }
 function renderSelect(st){
   st.innerHTML = `<div class="card"><p class="h">どれに挑戦する？</p><div class="sub">どちらが選んでもOK。チャットで相談してから決めよう。${V.clears?`<br>これまでのクリア: <b>${V.clears}</b>回`:""}</div></div>
@@ -410,7 +469,10 @@ function renderResult(st){
     <p class="h">${r.clear?"ミッションクリア！":"おしい！"}</p>
     <div class="sub">${g.ic} ${g.name}<br>${esc(r.text)}</div>
     <div class="sub">${r.clear?"ふたりの息がぴったり！ 仲良し度 +25":"いっしょに挑戦して 仲良し度 +8"}</div>
-    <div class="row"><button id="again">もう一度</button><button class="soft" id="menu">ほかのゲーム</button></div></div>`;
+    <div class="row"><button id="again">もう一度</button><button class="soft" id="menu">ほかのゲーム</button></div></div>
+    <div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="sub center">${esc(partner?partner.name:"相手")}さんにスタンプを送ろう</div>
+    <div class="stamps">${Object.entries(STAMPS).map(([k,[e,t]])=>`<button data-st="${k}">${e} ${t}</button>`).join("")}</div></div>`;
+  st.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>send({t:"stamp", id:b.dataset.st}));
   $("again").onclick=()=>act({type:"again"});
   $("menu").onclick=()=>act({type:"menu"});
 }
@@ -477,6 +539,182 @@ function drawMaze(cv, P){
   ctx.font=`${c*.6}px sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
   if(P.goal>=0) ctx.fillText("🏁", pad+(P.goal%w)*c+c/2, pad+Math.floor(P.goal/w)*c+c/2);
   ctx.fillText("🧭", pad+(P.pos%w)*c+c/2, pad+Math.floor(P.pos/w)*c+c/2);
+}
+
+/* ---------------- お絵かき伝言 ---------------- */
+const PALETTE = ["#2b2420","#e0533d","#2f7dd1","#2f9c6d","#f2b134","#ffffff"];
+const WIDTHS = [4, 9, 22];
+let pen = { c:0, w:1 }, liveStroke = null;
+function renderDraw(st){
+  const P = V.play;
+  const key = "draw-"+P.round+"-"+(P.drawer?"d":"g");
+  if(st.dataset.draw !== key){
+    st.dataset.draw = key;
+    st.innerHTML = `<div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <div class="row" style="justify-content:space-between"><span class="role">🎨 ${P.drawer?"描く人":"当てる人"}（${P.round+1}/${P.rounds}問目）</span><span class="sub">⏱ <span class="timer" id="dTimer">--</span>　正解 <b id="dHits">0</b>/${P.goal}</span></div>
+      ${P.drawer ? `<div class="sub center">お題（相手には見えません）</div><div class="word" id="dWord"></div>`
+                 : `<div class="sub center">相手が描いている絵を当てよう！ <b id="dLen"></b></div>`}
+      <div class="drawwrap"><canvas id="dBase" width="1000" height="1000"></canvas><canvas id="dLive" width="1000" height="1000"></canvas></div>
+      ${P.drawer ? `<div class="palette">${PALETTE.map((c,i)=>`<button class="sw" data-c="${i}" title="${i===5?"消しゴム":"色"}" style="background:${c}"></button>`).join("")}
+          <button class="tool" data-w="0">細</button><button class="tool" data-w="1">中</button><button class="tool" data-w="2">太</button>
+          <button class="tool" id="dUndo">↶ 戻す</button><button class="tool" id="dClear">全部消す</button></div>
+          <div class="sub center">チャットでヒントを出してもOK。でも答えそのものは書けません</div>`
+        : `<form class="guessrow" id="dGuess"><input type="text" id="dGuessIn" maxlength="20" placeholder="答えを入力（ひらがなでもOK）" autocomplete="off"><button type="submit">回答</button></form>
+          <div class="chips" id="dMiss"></div><div class="row"><button class="ghost" id="dPass" type="button">パス</button></div>`}
+    </div>`;
+    if(P.drawer) setupDrawer(); else {
+      $("dGuess").addEventListener("submit", e=>{ e.preventDefault(); const t=$("dGuessIn").value.trim(); if(t){ act({type:"guess", text:t, r:V.play.round}); $("dGuessIn").value=""; } });
+      $("dPass").onclick=()=>act({type:"pass", r:V.play.round});
+    }
+  }
+  // dynamic parts
+  if(P.drawer) $("dWord").textContent = P.word; else $("dLen").textContent = `（${P.len}文字）`;
+  $("dHits").textContent = P.hist.reduce((a,b)=>a+b,0);
+  if(!P.drawer){ const box=$("dMiss"); box.textContent=""; P.guesses.forEach(g=>{ const c=document.createElement("span"); c.className="chip"; c.textContent=g; box.appendChild(c); }); }
+  drawStrokes($("dBase"), P.strokes);
+}
+function strokePath(ctx, s){
+  const p=s.p; ctx.strokeStyle=PALETTE[s.c]||PALETTE[0]; ctx.lineWidth=WIDTHS[s.w]||9; ctx.lineCap="round"; ctx.lineJoin="round";
+  ctx.beginPath(); ctx.moveTo(p[0],p[1]); if(p.length===2) ctx.lineTo(p[0]+.1,p[1]); for(let i=2;i<p.length;i+=2) ctx.lineTo(p[i],p[i+1]); ctx.stroke();
+}
+function drawStrokes(cv, strokes){
+  const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,1000,1000);
+  strokes.forEach(s=>strokePath(ctx,s));
+}
+function setupDrawer(){
+  const live=$("dLive"), ctx=live.getContext("2d");
+  const paintTools=()=>{ document.querySelectorAll(".palette .sw").forEach(b=>b.classList.toggle("sel", +b.dataset.c===pen.c)); document.querySelectorAll(".palette [data-w]").forEach(b=>b.classList.toggle("sel", +b.dataset.w===pen.w)); };
+  document.querySelectorAll(".palette .sw").forEach(b=>b.onclick=()=>{ pen.c=+b.dataset.c; if(pen.c===5 && pen.w<2) pen.w=2; paintTools(); });
+  document.querySelectorAll(".palette [data-w]").forEach(b=>b.onclick=()=>{ pen.w=+b.dataset.w; paintTools(); });
+  $("dUndo").onclick=()=>act({type:"undo", r:V.play.round});
+  $("dClear").onclick=()=>act({type:"clear", r:V.play.round});
+  paintTools();
+  const pos=e=>{ const r=live.getBoundingClientRect(); return [Math.max(0,Math.min(1000,Math.round((e.clientX-r.left)*1000/r.width))), Math.max(0,Math.min(1000,Math.round((e.clientY-r.top)*1000/r.height)))]; };
+  const redrawLive=()=>{ ctx.clearRect(0,0,1000,1000); if(liveStroke) strokePath(ctx, liveStroke); };
+  const flush=()=>{ if(liveStroke && liveStroke.p.length>=2){ act({type:"stroke", p:liveStroke.p, c:liveStroke.c, w:liveStroke.w, r:V.play.round}); } };
+  live.addEventListener("pointerdown", e=>{ e.preventDefault(); live.setPointerCapture(e.pointerId); const [x,y]=pos(e); liveStroke={c:pen.c, w:pen.w, p:[x,y]}; redrawLive(); });
+  live.addEventListener("pointermove", e=>{
+    if(!liveStroke) return; const [x,y]=pos(e), p=liveStroke.p, lx=p[p.length-2], ly=p[p.length-1];
+    if(Math.abs(x-lx)+Math.abs(y-ly) < 6) return;
+    p.push(x,y); redrawLive();
+    if(p.length >= 960){ flush(); liveStroke={c:liveStroke.c, w:liveStroke.w, p:[x,y]}; }   // split very long strokes
+  });
+  const end=()=>{ if(!liveStroke) return; flush(); setTimeout(()=>{ ctx.clearRect(0,0,1000,1000); }, 250); liveStroke=null; };
+  live.addEventListener("pointerup", end); live.addEventListener("pointercancel", end); live.addEventListener("pointerleave", end);
+}
+setInterval(()=>{
+  const el=$("dTimer"); if(!el || !V || V.game!=="draw" || V.phase!=="play") return;
+  const left=Math.max(0, V.play.left - (performance.now()-V._at));
+  const s=Math.ceil(left/1000); el.textContent = s+"秒"; el.classList.toggle("low", s<=10);
+  if(s<=5 && s>0 && s!==el._last){ el._last=s; sfx("tick"); }
+}, 250);
+
+/* ---------------- ふたりパズル ---------------- */
+let selTile = null;
+function renderPuzzle(st){
+  const P=V.play;
+  if(selTile!==null && !P.hand.some(h=>h.k===selTile) && !P.board.some(b=>b&&b.mine&&b.k===selTile)) selTile=null;
+  const full = P.board.every(b=>b);
+  const mini = Array.from({length:9},(_,c)=>{ const h=P.hints.find(x=>x.cell===c); return `<div>${h?h.e:""}</div>`; }).join("");
+  st.innerHTML = `<div class="card" style="display:flex;flex-direction:column;gap:12px">
+    <div class="row" style="justify-content:space-between"><span class="role">🧩 ふたりパズル</span><span class="sub">答え合わせ あと <b>${P.checks}</b>/${P.maxChecks}回${P.lastCount!==null?`（前回 ${P.lastCount}/9）`:""}</span></div>
+    <div class="twocol">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="sub center"><b>ふたりの盤面</b>（<span style="color:var(--coral)">■</span>あなた <span style="color:var(--teal)">■</span>相手）</div>
+        <div class="pz">${P.board.map((b,c)=>`<button class="cell ${b?(b.mine?"mine":"theirs"):""}" data-cell="${c}">${b?b.e:""}</button>`).join("")}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="sub center"><b>相手のピースの正解位置</b><br>これを言葉で教えてあげよう</div>
+        <div class="mini">${mini}</div>
+        <div class="sub center" style="font-size:12px">あなたのピースの正解は、相手の画面にだけ出ています</div>
+      </div>
+    </div>
+    <div class="sub center">${P.hand.length?"あなたの手持ち（タップしてからマスをタップ）":"手持ちはすべて置きました"}</div>
+    <div class="hand">${P.hand.map(h=>`<button class="${selTile===h.k?"sel":""}" data-k="${h.k}">${h.e}</button>`).join("")}</div>
+    <div class="row"><button id="pzCheck" ${full?"":"disabled"}>答え合わせ</button></div>
+    ${full?"":`<div class="sub center" style="font-size:12px">9マス全部うまったら答え合わせできます</div>`}
+  </div>`;
+  st.querySelectorAll(".hand button").forEach(b=>b.onclick=()=>{ selTile = selTile===+b.dataset.k ? null : +b.dataset.k; sfx("tap"); renderPuzzle(st); });
+  st.querySelectorAll(".pz .cell").forEach(b=>b.onclick=()=>{
+    const c=+b.dataset.cell, cur=P.board[c];
+    if(selTile!==null){ if(cur && !cur.mine){ sys("そのマスには相手のピースがあります"); return; } act({type:"place", k:selTile, cell:c}); selTile=null; return; }
+    if(cur && cur.mine){ selTile=cur.k; act({type:"remove", cell:c}); }   // pick it back up
+  });
+  $("pzCheck").onclick=()=>act({type:"check"});
+}
+
+/* ---------------- 合わせて○○ ---------------- */
+function renderTen(st){
+  const P=V.play;
+  const hits=P.hist.reduce((a,b)=>a+b,0);
+  const dots=Array.from({length:P.rounds},(_,i)=>`<i class="${i<P.hist.length?(P.hist[i]?"ok":"ng"):(i===P.round?"cur":"")}"></i>`).join("");
+  let status;
+  if(P.reveal){
+    const sum=P.hand[P.mine]+P.theirs, ok=sum===P.target;
+    status=`<div class="reveal" style="color:${ok?"var(--coral)":"var(--muted)"}">${P.hand[P.mine]} ＋ ${P.theirs} ＝ ${sum}　${ok?"ぴったり！🎯":"おしい！"}</div>
+      <div class="row"><button id="tNext">${P.round+1>=P.rounds?"結果を見る":"次へ"}</button></div>`;
+  } else if(P.mine!==null) status=`<div class="sub center">相手が選ぶのを待っています…</div>`;
+  else status=`<div class="sub center">${P.theirsDone?"相手はもう選んだよ！":"相談してから1枚選ぼう"}</div>`;
+  st.innerHTML = `<div class="card" style="display:flex;flex-direction:column;gap:12px">
+    <div class="row" style="justify-content:space-between"><span class="role">🃏 合わせて○○</span><span class="sub">ぴったり <b>${hits}</b> / 目標 ${P.goal}</span></div>
+    <div class="progress">${dots}</div>
+    <div class="sub center">ふたりのカードの合計を、この数にしよう</div>
+    <div class="target">${P.target}</div>
+    <div class="sub center">相手のカード（${P.theirCount}枚）</div>
+    <div class="cards">${Array.from({length:P.theirCount},(_,i)=>`<div class="ncard back"></div>`).join("")}</div>
+    <div class="sub center">あなたのカード</div>
+    <div class="cards">${P.hand.map((v,i)=>`<button class="ncard ${P.mine===i?"sel":""}" data-i="${i}" ${P.mine!==null?"disabled":""}>${v}</button>`).join("")}</div>
+    ${status}
+    <div class="sub center" style="font-size:12px">⚠️ チャットで数字は言えません。「大きめ」「奇数」「真ん中くらい」などで伝えよう</div>
+  </div>`;
+  st.querySelectorAll(".ncard[data-i]").forEach(b=>b.onclick=()=>act({type:"pick", i:+b.dataset.i, r:P.round}));
+  if(P.reveal) $("tNext").onclick=()=>act({type:"next", r:P.round});
+}
+
+/* ---------------- stamps ---------------- */
+function showStamp(id, mine){
+  const s=STAMPS[id]; if(!s) return;
+  sys(mine ? `${s[0]}「${s[1]}」を送りました` : `${s[0]} ${partner?partner.name:"相手"}さんから「${s[1]}」`);
+  if(mine) return;
+  sfx("stamp");
+  const d=document.createElement("div"); d.className="stamp-pop";
+  const e=document.createElement("div"); e.className="e"; e.textContent=s[0];
+  const t=document.createElement("div"); t.className="t"; t.textContent=s[1];
+  const f=document.createElement("div"); f.className="f"; f.textContent=(partner?partner.name:"相手")+"さんから";
+  d.append(e,t,f); document.body.appendChild(d); setTimeout(()=>d.remove(),2300);
+}
+
+/* ---------------- sound effects (WebAudio, no files) ---------------- */
+let actx=null, muted = store.get("fm-mute")==="1";
+function paintSound(){ $("soundBtn").textContent = muted?"🔇":"🔊"; }
+$("soundBtn").onclick=()=>{ muted=!muted; store.set("fm-mute", muted?"1":"0"); paintSound(); if(!muted) sfx("tap"); };
+paintSound();
+function unlockAudio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx=null; } } if(actx && actx.state==="suspended") actx.resume().catch(()=>{}); }
+document.addEventListener("pointerdown", unlockAudio, {passive:true});
+document.addEventListener("keydown", unlockAudio);
+function tone(freq, start, dur, type="sine", vol=.14){
+  const o=actx.createOscillator(), g=actx.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq, actx.currentTime+start);
+  g.gain.setValueAtTime(0.0001, actx.currentTime+start);
+  g.gain.exponentialRampToValueAtTime(vol, actx.currentTime+start+0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+start+dur);
+  o.connect(g); g.connect(actx.destination); o.start(actx.currentTime+start); o.stop(actx.currentTime+start+dur+0.05);
+}
+function sfx(name){
+  if(muted || !actx || actx.state!=="running") return;
+  try{
+    switch(name){
+      case "tap":   tone(660,0,.06,"triangle",.07); break;
+      case "msg":   tone(880,0,.08,"sine",.08); tone(1320,.07,.1,"sine",.06); break;
+      case "good":  tone(784,0,.1,"triangle"); tone(1047,.09,.16,"triangle"); break;
+      case "bad":   tone(220,0,.16,"square",.06); tone(185,.12,.2,"square",.05); break;
+      case "tick":  tone(1000,0,.04,"square",.04); break;
+      case "match": [523,659,784,1047].forEach((f,i)=>tone(f,i*.08,.18,"triangle",.1)); break;
+      case "clear": [523,659,784,1047,1319].forEach((f,i)=>tone(f,i*.09,.25,"triangle",.11)); tone(1568,.5,.5,"sine",.08); break;
+      case "fail":  [392,349,330].forEach((f,i)=>tone(f,i*.14,.22,"triangle",.09)); break;
+      case "stamp": tone(988,0,.1,"sine",.1); tone(1319,.1,.22,"sine",.09); break;
+    }
+  }catch(e){}
 }
 
 /* ---------------- chat ---------------- */

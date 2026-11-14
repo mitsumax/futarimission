@@ -28,7 +28,37 @@ const QUESTIONS = [
 ];
 const K_TOTAL = 6, K_GOAL = 4;
 
-const GAME_IDS = ['kokoro', 'lock', 'maze'];
+const GAME_IDS = ['kokoro', 'lock', 'maze', 'draw', 'puzzle', 'ten'];
+
+// ---- お絵かき伝言: お題 [表示用, ...正解として認める書き方]
+const WORDS = [
+  ['りんご', '林檎', 'リンゴ', 'apple'], ['ねこ', '猫'], ['いぬ', '犬'], ['さかな', '魚'], ['くるま', '車'],
+  ['でんしゃ', '電車'], ['ひこうき', '飛行機'], ['いえ', '家'], ['き', '木'], ['はな', '花'], ['たいよう', '太陽'],
+  ['つき', '月'], ['ほし', '星'], ['あめ', '雨'], ['かさ', '傘'], ['めがね', '眼鏡'], ['とけい', '時計'],
+  ['くつ', '靴'], ['ぼうし', '帽子'], ['けーき', 'ケーキ'], ['すいか', '西瓜', 'スイカ'], ['ばなな', 'バナナ'],
+  ['うさぎ', '兎'], ['ぞう', '象'], ['きりん', 'キリン'], ['へび', '蛇'], ['かめ', '亀'], ['とり', '鳥'],
+  ['やま', '山'], ['うみ', '海'], ['ゆきだるま', '雪だるま'], ['にじ', '虹'], ['ふね', '船'], ['じてんしゃ', '自転車'],
+  ['ぎたー', 'ギター'], ['えんぴつ', '鉛筆'], ['はさみ', '鋏', 'ハサミ'], ['かぎ', '鍵'], ['でんきゅう', '電球'],
+  ['おにぎり', 'お握り'], ['らーめん', 'ラーメン'], ['すし', '寿司'], ['たこ', '蛸', 'タコ'], ['かに', '蟹', 'カニ'],
+  ['ろけっと', 'ロケット'], ['ろぼっと', 'ロボット'], ['てがみ', '手紙'], ['ほん', '本'], ['てれび', 'テレビ'],
+];
+const DRAW_ROUNDS = 3, DRAW_GOAL = 2, DRAW_MS = 80_000;
+const MAX_STROKE_PTS = 500, MAX_TOTAL_PTS = 8000;
+const PALETTE = 6;
+
+// ---- ふたりパズル
+const TILES = ['🍎', '🍌', '🍇', '🍓', '🍉', '🍑', '🍒', '🍋', '🥝', '🍍', '🥕', '🌽', '🍄', '🌸', '⭐', '🐟'];
+const PUZZLE_CHECKS = 3;
+
+// ---- 合わせて10
+const TEN_ROUNDS = 4, TEN_GOAL = 3;
+
+/** For comparing guesses: full-width→half, katakana→hiragana, drop spaces & punctuation. */
+function normWord(t) {
+  return String(t).normalize('NFKC').toLowerCase()
+    .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[\s、。，．,.!！?？「」『』・〜~ｰ_-]/g, '');
+}
 
 const rnd = (n) => Math.floor(Math.random() * n);
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -49,7 +79,44 @@ function startGame(S, game) {
   } else if (game === 'maze') {
     const w = 8;
     S.data = { w, cells: genMaze(w), pos: 0, goal: w * w - 1, moves: 0, bumps: 0, maxBumps: 8, nav: S.swap ? 'a' : 'b' };
+  } else if (game === 'draw') {
+    S.data = { round: 0, hist: [], words: shuffle([...WORDS.keys()]).slice(0, DRAW_ROUNDS) };
+    newDrawRound(S);
+  } else if (game === 'puzzle') {
+    const ids = shuffle([...TILES.keys()]).slice(0, 9);          // tile k shows TILES[ids[k]]
+    const cells = shuffle([...Array(9).keys()]);                 // tile k belongs at cells[k]
+    const mineA = S.swap ? 5 : 4;
+    S.data = { emoji: ids.map((i) => TILES[i]), target: cells, owner: Array.from({ length: 9 }, (_, k) => (k < mineA ? 'a' : 'b')),
+      board: Array(9).fill(null), checks: PUZZLE_CHECKS, lastCount: null };
+  } else if (game === 'ten') {
+    const hand = () => Array.from({ length: 5 }, () => 1 + rnd(9));
+    S.data = { hands: { a: hand(), b: hand() }, round: 0, hist: [], pick: { a: null, b: null }, reveal: false };
+    S.data.target = tenTarget(S.data);
   }
+}
+
+function newDrawRound(S, now = Date.now()) {
+  const D = S.data;
+  D.drawer = ((D.round + (S.swap ? 0 : 1)) % 2 === 0) ? 'a' : 'b';
+  D.word = WORDS[D.words[D.round]];
+  D.strokes = []; D.pts = 0; D.guesses = [];
+  D.deadline = now + DRAW_MS;
+}
+function endDrawRound(S, ok, notes, now) {
+  const D = S.data;
+  D.hist.push(ok ? 1 : 0);
+  D.round++;
+  if (D.round >= DRAW_ROUNDS) {
+    const hits = D.hist.reduce((a, b) => a + b, 0);
+    finish(S, hits >= DRAW_GOAL, `${DRAW_ROUNDS}問中 ${hits}問 正解！`);
+  } else {
+    newDrawRound(S, now);
+    notes.push('✏️ 次のお題！ 描く人を交代');
+  }
+}
+function tenTarget(D) {
+  const a = D.hands.a[rnd(D.hands.a.length)], b = D.hands.b[rnd(D.hands.b.length)];
+  return a + b;
 }
 
 function newLock(S, round) {
@@ -146,12 +213,111 @@ function apply(S, role, a) {
       }
       out.changed = true;
     }
+  } else if (S.game === 'draw') {
+    if (a.r !== D.round) return out;
+    const now = Date.now();
+    if (role === D.drawer) {
+      if (t === 'stroke' && Array.isArray(a.p) && a.p.length >= 2 && a.p.length <= MAX_STROKE_PTS * 2 && a.p.length % 2 === 0) {
+        if (!a.p.every((v) => Number.isInteger(v) && v >= 0 && v <= 1000)) return out;
+        if (D.pts + a.p.length / 2 > MAX_TOTAL_PTS) { out.notes.push('🖍️ これ以上は描けません（消して描き直そう）'); out.changed = true; return out; }
+        const c = Number.isInteger(a.c) && a.c >= 0 && a.c < PALETTE ? a.c : 0;
+        const w = a.w === 2 ? 2 : a.w === 0 ? 0 : 1;
+        D.strokes.push({ c, w, p: a.p }); D.pts += a.p.length / 2; out.changed = true;
+      } else if (t === 'undo' && D.strokes.length) {
+        const s = D.strokes.pop(); D.pts -= s.p.length / 2; out.changed = true;
+      } else if (t === 'clear' && D.strokes.length) {
+        D.strokes = []; D.pts = 0; out.changed = true;
+      }
+    } else {
+      if (t === 'guess' && typeof a.text === 'string') {
+        const g = normWord(a.text.slice(0, 30));
+        if (!g) return out;
+        if (D.word.some((w) => normWord(w) === g)) {
+          out.notes.push(`⭕ 正解！ お題は「${D.word[0]}」でした`);
+          endDrawRound(S, true, out.notes, now);
+        } else {
+          D.guesses.push(a.text.slice(0, 20)); if (D.guesses.length > 6) D.guesses.shift();
+        }
+        out.changed = true;
+      } else if (t === 'pass') {
+        out.notes.push(`🏳️ パス！ お題は「${D.word[0]}」でした`);
+        endDrawRound(S, false, out.notes, now);
+        out.changed = true;
+      }
+    }
+  } else if (S.game === 'puzzle') {
+    if (t === 'place' && Number.isInteger(a.k) && a.k >= 0 && a.k < 9 && Number.isInteger(a.cell) && a.cell >= 0 && a.cell < 9) {
+      if (D.owner[a.k] !== role) return out;
+      const occ = D.board[a.cell];
+      if (occ !== null && D.owner[occ] !== role) return out;   // can't move the partner's tile
+      const prev = D.board.indexOf(a.k);
+      if (prev >= 0) D.board[prev] = null;
+      D.board[a.cell] = a.k;                                    // own tile that was there goes back to hand
+      out.changed = true;
+    } else if (t === 'remove' && Number.isInteger(a.cell) && a.cell >= 0 && a.cell < 9) {
+      const k = D.board[a.cell];
+      if (k === null || D.owner[k] !== role) return out;
+      D.board[a.cell] = null; out.changed = true;
+    } else if (t === 'check' && D.board.every((k) => k !== null)) {
+      const ok = D.board.filter((k, cell) => D.target[k] === cell).length;
+      if (ok === 9) finish(S, true, `答え合わせ ${PUZZLE_CHECKS - D.checks + 1}回目で完成！`);
+      else {
+        D.checks--; D.lastCount = ok;
+        out.notes.push(`🧩 正しい位置は ${ok}/9 個。あと${D.checks}回答え合わせできます`);
+        if (D.checks <= 0) finish(S, false, `正しい位置は ${ok}/9 個でした…`);
+      }
+      out.changed = true;
+    }
+  } else if (S.game === 'ten') {
+    if (t === 'pick' && !D.reveal && a.r === D.round && Number.isInteger(a.i) && a.i >= 0 && a.i < D.hands[role].length && D.pick[role] === null) {
+      D.pick[role] = a.i;
+      if (D.pick.a !== null && D.pick.b !== null) {
+        D.reveal = true;
+        D.hist.push(D.hands.a[D.pick.a] + D.hands.b[D.pick.b] === D.target ? 1 : 0);
+      }
+      out.changed = true;
+    } else if (t === 'next' && D.reveal && a.r === D.round) {
+      D.hands.a.splice(D.pick.a, 1); D.hands.b.splice(D.pick.b, 1);
+      D.round++; D.pick = { a: null, b: null }; D.reveal = false;
+      if (D.round >= TEN_ROUNDS) {
+        const hits = D.hist.reduce((x, y) => x + y, 0);
+        finish(S, hits >= TEN_GOAL, `${TEN_ROUNDS}回中 ${hits}回 ぴったり！`);
+      } else D.target = tenTarget(D);
+      out.changed = true;
+    }
   }
   return out;
 }
 
+/** Time-based updates (お絵かき伝言の制限時間). Call about twice a second. */
+function tick(S, now = Date.now()) {
+  const out = { changed: false, notes: [] };
+  if (S.phase === 'play' && S.game === 'draw' && S.data && now >= S.data.deadline) {
+    out.notes.push(`⏰ 時間切れ！ お題は「${S.data.word[0]}」でした`);
+    endDrawRound(S, false, out.notes, now);
+    out.changed = true;
+  }
+  return out;
+}
+
+/** Game-specific chat rules. Returns a reason string to reject the message, or null. */
+function chatGuard(S, role, text) {
+  if (S.phase !== 'play' || !S.data) return null;
+  const D = S.data;
+  if (S.game === 'draw' && role === D.drawer) {
+    const z = normWord(text);
+    if (D.word.some((w) => z.includes(normWord(w)))) return 'お題の答えはチャットに書けません（絵で伝えよう！）';
+  }
+  if (S.game === 'ten') {
+    const z = String(text).normalize('NFKC').toLowerCase();
+    if (/[0-9〇二三四五六七八九]|いち|ろく|なな|しち|はち|きゅう|じゅう|\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/.test(z))
+      return 'このゲーム中は数字を直接言えません（「大きめ」「奇数」などのヒントで伝えよう）';
+  }
+  return null;
+}
+
 /** What `role` is allowed to see. */
-function view(S, role) {
+function view(S, role, now = Date.now()) {
   const v = { phase: S.phase, game: S.game, bond: S.bond, clears: S.clears, result: S.result };
   if (S.phase !== 'play' || !S.data) return v;
   const D = S.data, op = other(role);
@@ -178,8 +344,31 @@ function view(S, role) {
       cells: D.cells.map((c, i) => (vis(i) ? c : null)),
       goal: vis(D.goal) ? D.goal : -1,
     };
+  } else if (S.game === 'draw') {
+    const drawer = D.drawer === role;
+    v.play = {
+      round: D.round, rounds: DRAW_ROUNDS, goal: DRAW_GOAL, hist: D.hist.slice(), drawer,
+      strokes: D.strokes, guesses: D.guesses.slice(), left: Math.max(0, D.deadline - now),
+      len: [...D.word[0]].length,
+    };
+    if (drawer) v.play.word = D.word[0];
+  } else if (S.game === 'puzzle') {
+    v.play = {
+      checks: D.checks, maxChecks: PUZZLE_CHECKS, lastCount: D.lastCount,
+      board: D.board.map((k) => (k === null ? null : { k, e: D.emoji[k], mine: D.owner[k] === role })),
+      hand: D.emoji.map((e, k) => ({ k, e })).filter((x) => D.owner[x.k] === role && !D.board.includes(x.k)),
+      // where the PARTNER's tiles belong — your own targets are never sent to you
+      hints: D.emoji.map((e, k) => ({ e, cell: D.target[k] })).filter((_, k) => D.owner[k] === op),
+    };
+  } else if (S.game === 'ten') {
+    v.play = {
+      round: D.round, rounds: TEN_ROUNDS, goal: TEN_GOAL, hist: D.hist.slice(), target: D.target,
+      hand: D.hands[role].slice(), theirCount: D.hands[op].length,
+      mine: D.pick[role], theirsDone: D.pick[op] !== null, reveal: D.reveal,
+      theirs: D.reveal ? D.hands[op][D.pick[op]] : null,
+    };
   }
   return v;
 }
 
-module.exports = { newPairState, apply, view, GAME_IDS, QUESTIONS, genMaze, _internal: { startGame } };
+module.exports = { newPairState, apply, view, tick, chatGuard, normWord, GAME_IDS, QUESTIONS, WORDS, genMaze, _internal: { startGame } };

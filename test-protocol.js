@@ -1,6 +1,7 @@
 'use strict';
 // Protocol / integration tests against a real server instance. Run: node test-protocol.js (Node >= 22)
 process.env.TRUST_PROXY = '1';
+process.env.ADMIN_TOKEN = 'test-admin-token-123';
 process.env.DATA_DIR = require('path').join(require('os').tmpdir(), 'futari-test-' + Date.now());
 const assert = require('assert');
 const { server, _state } = require('./server');
@@ -136,6 +137,57 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
     const r2 = await fetch(`http://127.0.0.1:${PORT}/server.js`); assert.strictEqual(r2.status, 404);
     const r4 = await fetch(`http://127.0.0.1:${PORT}/%2e%2e/server.js`); assert.ok([403, 404].includes(r4.status));
     const r3 = await fetch(`http://127.0.0.1:${PORT}/healthz`); assert.strictEqual(r3.status, 200);
+  });
+
+
+  await t('stamps are relayed to the partner; unknown stamps ignored', async () => {
+    const { A, B } = await joinAndMatch('10.1.0.1', '10.1.0.2');
+    A.send({ t: 'stamp', id: 'fun' });
+    assert.strictEqual((await B.next('stamp')).id, 'fun');
+    assert.strictEqual((await A.next('stamp')).from, 'me');
+    A.send({ t: 'stamp', id: '<script>' }); await sleep(150);
+    assert.ok(!B.inbox.some((m) => m.t === 'stamp'));
+    A.ws.close(); B.ws.close(); await sleep(50);
+  });
+
+  await t('draw: drawer\'s chat containing the answer is blocked; guesser\'s socket never gets the word', async () => {
+    const { A, B } = await joinAndMatch('10.1.1.1', '10.1.1.2');
+    await A.next('view'); await B.next('view');
+    A.send({ t: 'act', a: { type: 'pick', game: 'draw' } });
+    const vA = (await A.next('view')).view, vB = (await B.next('view')).view;
+    const drawer = vA.play.drawer ? A : B, guesser = vA.play.drawer ? B : A;
+    const word = (vA.play.drawer ? vA : vB).play.word;
+    assert.ok(word && !('word' in (vA.play.drawer ? vB : vA).play));
+    drawer.send({ t: 'chat', text: 'これは' + word + 'です', id: 'w1' });
+    await drawer.next('chat_rejected');
+    await sleep(120);
+    assert.ok(!guesser.inbox.some((m) => m.t === 'chat'));
+    guesser.send({ t: 'act', a: { type: 'guess', text: word, r: 0 } });
+    assert.ok((await guesser.next('sys')).text.startsWith('⭕'));
+    A.ws.close(); B.ws.close(); await sleep(50);
+  });
+
+  await t('admin API: 401 without token; stats / reports / ban / unban / handled work', async () => {
+    const base = `http://127.0.0.1:${PORT}/admin/api/`;
+    assert.strictEqual((await fetch(base + 'stats')).status, 401);
+    assert.strictEqual((await fetch(base + 'stats', { headers: { 'x-admin-token': 'wrong-token-xxxxxxx' } })).status, 401);
+    const H = { 'x-admin-token': 'test-admin-token-123', 'content-type': 'application/json' };
+    const stats = await (await fetch(base + 'stats', { headers: H })).json();
+    assert.ok('online' in stats && 'reportsToday' in stats);
+    const reps = await (await fetch(base + 'reports', { headers: H })).json();
+    assert.ok(reps.length >= 3 && reps[0].log && reps[0].id);
+    const ip = reps[0].reportedIp;
+    assert.ok(reps[0].bannedUntil, 'auto-banned user shows as banned');
+    let r = await fetch(base + 'unban', { method: 'POST', headers: H, body: JSON.stringify({ ipHash: ip }) });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual((await (await fetch(base + 'bans', { headers: H })).json()).length, 0);
+    const C = await client('10.0.9.9'); const h = await C.next('hello'); assert.ok(h.token, 'unbanned user can connect');
+    r = await fetch(base + 'ban', { method: 'POST', headers: H, body: JSON.stringify({ ipHash: ip, hours: 1 }) });
+    assert.strictEqual(r.status, 200);
+    await C.next('banned');
+    await fetch(base + 'handled', { method: 'POST', headers: H, body: JSON.stringify({ id: reps[0].id, handled: true }) });
+    assert.strictEqual((await (await fetch(base + 'reports', { headers: H })).json())[0].handled, true);
+    const page = await fetch(`http://127.0.0.1:${PORT}/admin`); assert.strictEqual(page.status, 200);
   });
 
   console.log(`\n${n} protocol tests passed`);

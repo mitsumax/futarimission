@@ -9,7 +9,7 @@
  *   TRUST_PROXY=1     use X-Forwarded-For for client IP (set when behind Render/Fly/nginx)
  *   ALLOWED_ORIGINS   comma-separated origins allowed to open /ws (default: same host only)
  *   HASH_SALT         salt for hashing IPs/tokens in report logs (set a long random value!)
- *   ADMIN_TOKEN       enables GET /admin/stats and /admin/reports with header "x-admin-token"
+ *   ADMIN_TOKEN       enables the admin page at /admin (enter this token there)
  *   DATA_DIR          where reports.jsonl / bans.json are written (default ./data)
  */
 const http = require('http');
@@ -39,6 +39,7 @@ const BAN_MS = 24 * 3600_000;
 const AVOID_REMATCH_MS = 3 * 60_000; // don't re-pair the same two people right away
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+const STAMPS = ['fun', 'team', 'thanks', 'again'];
 const hash = (v) => crypto.createHash('sha256').update(HASH_SALT + '|' + v).digest('hex').slice(0, 24);
 const uid = () => crypto.randomBytes(8).toString('hex');
 const now = () => Date.now();
@@ -73,7 +74,8 @@ function partnerOf(p) { if (!p.pair) return null; return p.role === 'a' ? p.pair
 function publicInfo(p) { return { name: p.name, g: p.g }; }
 
 function pushView(pair) {
-  for (const role of ['a', 'b']) send(pair[role], { t: 'view', view: games.view(pair.S, role) });
+  const t = now();
+  for (const role of ['a', 'b']) send(pair[role], { t: 'view', view: games.view(pair.S, role, t) });
 }
 function sysBoth(pair, text) { for (const role of ['a', 'b']) send(pair[role], { t: 'sys', text }); }
 
@@ -103,6 +105,15 @@ function runMatcher() {
   broadcastStats();
 }
 setInterval(runMatcher, 1000);
+
+// time limits (お絵かき伝言)
+setInterval(() => {
+  const t = now();
+  for (const pair of pairs.values()) {
+    const res = games.tick(pair.S, t);
+    if (res.changed) { pushView(pair); for (const n of res.notes) sysBoth(pair, n); }
+  }
+}, 500);
 
 function makePair(a, b) {
   queue.delete(a); queue.delete(b);
@@ -168,7 +179,7 @@ function onMessage(p, raw) {
       const text = m.text.normalize('NFC').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, 200);
       if (!text) return;
       if (!rateOk(p.chatTimes, CHAT_BURST, CHAT_WINDOW_MS)) return send(p, { t: 'chat_rejected', id: m.id, text: '送信が速すぎます。少し待ってから送ってください' });
-      const why = checkChat(text);
+      const why = games.chatGuard(p.pair.S, p.role, text) || checkChat(text);
       if (why) return send(p, { t: 'chat_rejected', id: m.id, text: why });
       const ts = now();
       p.pair.log.push({ role: p.role, text, ts }); if (p.pair.log.length > 40) p.pair.log.shift();
@@ -191,7 +202,7 @@ function onMessage(p, raw) {
       const q = partnerOf(p);
       const reason = String(m.reason || '').slice(0, 300);
       const entry = {
-        ts: new Date().toISOString(), pairId: p.pair.id,
+        id: uid(), ts: new Date().toISOString(), pairId: p.pair.id,
         reporter: hash('t:' + p.token), reported: hash('t:' + q.token), reportedIp: q.ipHash,
         reportedName: q.name, reason,
         // the recent conversation is kept ONLY in memory during a pair; it is written only when someone reports
@@ -208,6 +219,13 @@ function onMessage(p, raw) {
         bans.set(q.ipHash, now() + BAN_MS); saveBans();
         for (const x of players.values()) if (x.ipHash === q.ipHash && x.ws) { send(x, { t: 'banned' }); x.ws.close(4003); }
       }
+      return;
+    }
+    case 'stamp': {
+      if (p.state !== 'paired' || !p.pair || !STAMPS.includes(m.id)) return;
+      if (!rateOk(p.stampTimes || (p.stampTimes = []), 3, 10_000)) return;
+      send(p, { t: 'stamp', id: m.id, from: 'me' });
+      send(partnerOf(p), { t: 'stamp', id: m.id, from: 'partner' });
       return;
     }
     case 'ping': return send(p, { t: 'pong' });
@@ -293,7 +311,7 @@ const SEC_HEADERS = {
 };
 
 // Only these files are public. Everything else in the folder (server code, data) is never served.
-const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/favicon.svg': 'favicon.svg' };
+const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/favicon.svg': 'favicon.svg', '/admin': 'admin.html' };
 
 function serveStatic(req, res) {
   let urlPath;
@@ -310,21 +328,100 @@ function serveStatic(req, res) {
   });
 }
 
-function adminOk(req) { return ADMIN_TOKEN && req.headers['x-admin-token'] === ADMIN_TOKEN; }
+function adminOk(req) {
+  const got = String(req.headers['x-admin-token'] || '');
+  if (!ADMIN_TOKEN || got.length !== ADMIN_TOKEN.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(ADMIN_TOKEN));
+}
+
+// ---- admin data
+const HANDLED_FILE = path.join(DATA_DIR, 'handled.json');
+let handled = {};
+try { handled = JSON.parse(fs.readFileSync(HANDLED_FILE, 'utf8')); } catch (e) { /* none */ }
+
+function readReports(limit) {
+  let lines = [];
+  try { lines = fs.readFileSync(path.join(DATA_DIR, 'reports.jsonl'), 'utf8').split('\n').filter(Boolean); } catch (e) { return []; }
+  const out = [];
+  for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
+    try {
+      const r = JSON.parse(lines[i]);
+      r.id = r.id || ('L' + i);
+      r.handled = !!handled[r.id];
+      r.bannedUntil = (bans.get(r.reportedIp) || 0) > now() ? bans.get(r.reportedIp) : null;
+      r.reportsAgainst = (reportsAgainst.get(r.reportedIp) || []).filter((x) => x.ts > now() - BAN_MS).length;
+      out.push(r);
+    } catch (e) { /* skip broken line */ }
+  }
+  return out;
+}
+
+function readBody(req, max = 10_000) {
+  return new Promise((resolve) => {
+    let size = 0; const chunks = [];
+    req.on('data', (c) => { size += c.length; if (size > max) { req.destroy(); resolve(null); } else chunks.push(c); });
+    req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch (e) { resolve(null); } });
+  });
+}
+
+function json(res, code, obj) {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(obj));
+}
+
+function banIp(ipHash, ms) {
+  bans.set(ipHash, now() + ms); saveBans();
+  for (const x of players.values()) if (x.ipHash === ipHash && x.ws && !x.ws.closed) { send(x, { t: 'banned' }); x.ws.close(4003); }
+}
+
+async function handleAdmin(req, res, u) {
+  if (!adminOk(req)) return json(res, 401, { error: 'unauthorized' });
+  const route = req.method + ' ' + u.pathname;
+  if (route === 'GET /admin/api/stats') {
+    const dayAgo = now() - 24 * 3600_000;
+    const reportsToday = readReports(1000).filter((r) => Date.parse(r.ts) > dayAgo).length;
+    return json(res, 200, {
+      online: [...players.values()].filter((p) => p.ws && !p.ws.closed).length,
+      waiting: queue.size, pairs: pairs.size,
+      bans: [...bans.values()].filter((v) => v > now()).length,
+      reportsToday, uptimeSec: Math.round(process.uptime()),
+    });
+  }
+  if (route === 'GET /admin/api/reports') {
+    const limit = Math.min(500, Number(u.searchParams.get('limit')) || 200);
+    return json(res, 200, readReports(limit));
+  }
+  if (route === 'GET /admin/api/bans') {
+    return json(res, 200, [...bans.entries()].filter(([, v]) => v > now()).map(([ipHash, until]) => ({ ipHash, until })));
+  }
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body) return json(res, 400, { error: 'bad body' });
+    if (u.pathname === '/admin/api/ban' && /^[a-f0-9]{24}$/.test(body.ipHash || '')) {
+      const hours = Math.min(24 * 365, Math.max(1, Number(body.hours) || 24));
+      banIp(body.ipHash, hours * 3600_000);
+      return json(res, 200, { ok: true });
+    }
+    if (u.pathname === '/admin/api/unban' && typeof body.ipHash === 'string') {
+      bans.delete(body.ipHash); reportsAgainst.delete(body.ipHash); saveBans();
+      return json(res, 200, { ok: true });
+    }
+    if (u.pathname === '/admin/api/handled' && typeof body.id === 'string' && body.id.length < 40) {
+      if (body.handled) handled[body.id] = now(); else delete handled[body.id];
+      fs.writeFile(HANDLED_FILE, JSON.stringify(handled), () => {});
+      return json(res, 200, { ok: true });
+    }
+  }
+  return json(res, 404, { error: 'not found' });
+}
 
 const server = http.createServer((req, res) => {
-  if (req.url === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
-  if (req.url.startsWith('/admin/')) {
-    if (!adminOk(req)) { res.writeHead(404); return res.end(); }
-    if (req.url === '/admin/stats') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ players: players.size, waiting: queue.size, pairs: pairs.size, bans: [...bans.values()].filter((v) => v > now()).length }));
-    }
-    if (req.url === '/admin/reports') {
-      res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8' });
-      return fs.createReadStream(path.join(DATA_DIR, 'reports.jsonl')).on('error', () => res.end('')).pipe(res);
-    }
-    res.writeHead(404); return res.end();
+  let u;
+  try { u = new URL(req.url, 'http://x'); } catch (e) { res.writeHead(400); return res.end(); }
+  if (u.pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
+  if (u.pathname.startsWith('/admin/api/')) {
+    handleAdmin(req, res, u).catch((e) => { console.error('admin error', e); json(res, 500, { error: 'server error' }); });
+    return;
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
   serveStatic(req, res);
