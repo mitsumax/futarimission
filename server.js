@@ -27,7 +27,6 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) =
 const HASH_SALT = process.env.HASH_SALT || crypto.randomBytes(16).toString('hex');
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
-const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // ---- tunables ----
 const RECONNECT_GRACE_MS = 20_000;   // keep a pair alive while a phone briefly drops
@@ -293,12 +292,15 @@ const SEC_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:; frame-ancestors 'none'",
 };
 
+// Only these files are public. Everything else in the folder (server code, data) is never served.
+const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/favicon.svg': 'favicon.svg' };
+
 function serveStatic(req, res) {
   let urlPath;
-  try { urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch (e) { res.writeHead(400); return res.end(); }
-  if (urlPath === '/') urlPath = '/index.html';
-  const file = path.normalize(path.join(PUBLIC_DIR, urlPath));
-  if (!file.startsWith(PUBLIC_DIR + path.sep)) { res.writeHead(403); return res.end(); }
+  try { urlPath = new URL(req.url, 'http://x').pathname; } catch (e) { res.writeHead(400); return res.end(); }
+  const name = PUBLIC_FILES[urlPath];
+  if (!name) { res.writeHead(404, SEC_HEADERS); return res.end('not found'); }
+  const file = path.join(__dirname, name);
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404, SEC_HEADERS); return res.end('not found'); }
     const ext = path.extname(file);
