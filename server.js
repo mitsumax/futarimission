@@ -11,6 +11,9 @@
  *   HASH_SALT         salt for hashing IPs/tokens in report logs (set a long random value!)
  *   ADMIN_TOKEN       enables the admin page at /admin (enter this token there)
  *   DATA_DIR          where reports.jsonl / bans.json are written (default ./data)
+ *   STORE_URL         URL of php-store/store.php on a rental server (e.g. Core Server) — when set with STORE_TOKEN, records are saved there
+ *   STORE_PROVIDER    where those records are kept, shown in the privacy policy (default: GMOデジロック「コアサーバー」)
+ *   STORE_TOKEN       shared secret, the same value written in store.php
  *   MIN_AGE           minimum age shown in the terms and on the start screen (default 18)
  *   CONTACT_EMAIL     contact address shown in the terms / privacy policy
  *   OPERATOR_NAME     operator name shown in the terms / privacy policy
@@ -22,6 +25,7 @@ const crypto = require('crypto');
 const { handleUpgrade } = require('./ws');
 const games = require('./games');
 const { checkChat, cleanName } = require('./filter');
+const { Storage } = require('./storage');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -56,29 +60,17 @@ const uid = () => crypto.randomBytes(8).toString('hex');
 const now = () => Date.now();
 
 // ---------------------------------------------------------------- moderation
-const bans = new Map();          // ipHash -> until
-const reportsAgainst = new Map(); // ipHash -> [{by, ts}]
-try {
-  const saved = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'bans.json'), 'utf8'));
-  for (const [k, v] of Object.entries(saved)) if (v > now()) bans.set(k, v);
-} catch (e) { /* none yet */ }
+const store = new Storage({
+  dataDir: DATA_DIR, url: process.env.STORE_URL, token: process.env.STORE_TOKEN,
+  retentionDays: REPORT_RETENTION_DAYS, log: console,
+});
+const storeReady = store.init();
+const bans = store.bans;           // ipHash -> until (ms)
+const reportsAgainst = new Map();  // ipHash -> [{by, ts}]  (in memory only: a 24h window)
+const saveBans = () => store.saveBans();
 // Reports are kept for REPORT_RETENTION_DAYS (stated in the privacy policy), then deleted.
-function pruneReports() {
-  const file = path.join(DATA_DIR, 'reports.jsonl');
-  let lines;
-  try { lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean); } catch (e) { return 0; }
-  const cutoff = Date.now() - REPORT_RETENTION_DAYS * 24 * 3600_000;
-  const keep = lines.filter((l) => { try { return Date.parse(JSON.parse(l).ts) >= cutoff; } catch (e) { return false; } });
-  if (keep.length !== lines.length) fs.writeFileSync(file, keep.length ? keep.join('\n') + '\n' : '');
-  return lines.length - keep.length;
-}
-pruneReports();
+const pruneReports = () => store.prune();
 setInterval(pruneReports, 6 * 3600_000).unref();
-
-function saveBans() {
-  const o = {}; for (const [k, v] of bans) if (v > now()) o[k] = v;
-  fs.writeFile(path.join(DATA_DIR, 'bans.json'), JSON.stringify(o), () => {});
-}
 const isBanned = (ipHash) => (bans.get(ipHash) || 0) > now();
 
 // ---------------------------------------------------------------- state
@@ -287,7 +279,7 @@ function onMessage(p, raw) {
         // the recent conversation is kept ONLY in memory during a pair; it is written only when someone reports
         log: p.pair.log.map((l) => ({ who: l.role === p.role ? 'reporter' : 'reported', text: l.text, ts: l.ts })),
       };
-      fs.appendFile(path.join(DATA_DIR, 'reports.jsonl'), JSON.stringify(entry) + '\n', () => {});
+      store.addReport(entry);
       const list = (reportsAgainst.get(q.ipHash) || []).filter((r) => r.ts > now() - BAN_MS && r.by !== p.ipHash);
       list.push({ by: p.ipHash, ts: now() });
       reportsAgainst.set(q.ipHash, list);
@@ -398,7 +390,11 @@ const PUBLIC_FILES = { '/': 'index.html', '/index.html': 'index.html', '/favicon
 
 // {{PLACEHOLDERS}} in the HTML pages are filled from environment variables (HTML-escaped)
 const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const STORE_PROVIDER = (process.env.STORE_PROVIDER || 'GMOデジロック株式会社が提供するレンタルサーバー「コアサーバー」（日本国内）').trim();
 const PAGE_VARS = {
+  STORAGE_NOTE: process.env.STORE_URL && process.env.STORE_TOKEN
+    ? `通報の記録、利用停止の記録、対応済みの印は、${STORE_PROVIDER}に保存します。`
+    : '通報の記録、利用停止の記録、対応済みの印は、上記のクラウドサーバー上に保存します。',
   MIN_AGE: String(MIN_AGE),
   CONTACT_EMAIL: CONTACT_EMAIL || '（準備中：運営者が設定します）',
   OPERATOR_NAME: OPERATOR_NAME,
@@ -436,23 +432,15 @@ function adminOk(req) {
 }
 
 // ---- admin data
-const HANDLED_FILE = path.join(DATA_DIR, 'handled.json');
-let handled = {};
-try { handled = JSON.parse(fs.readFileSync(HANDLED_FILE, 'utf8')); } catch (e) { /* none */ }
-
 function readReports(limit) {
-  let lines = [];
-  try { lines = fs.readFileSync(path.join(DATA_DIR, 'reports.jsonl'), 'utf8').split('\n').filter(Boolean); } catch (e) { return []; }
   const out = [];
-  for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
-    try {
-      const r = JSON.parse(lines[i]);
-      r.id = r.id || ('L' + i);
-      r.handled = !!handled[r.id];
-      r.bannedUntil = (bans.get(r.reportedIp) || 0) > now() ? bans.get(r.reportedIp) : null;
-      r.reportsAgainst = (reportsAgainst.get(r.reportedIp) || []).filter((x) => x.ts > now() - BAN_MS).length;
-      out.push(r);
-    } catch (e) { /* skip broken line */ }
+  for (let i = store.reports.length - 1; i >= 0 && out.length < limit; i--) {
+    const r = { ...store.reports[i] };
+    r.id = r.id || ('L' + i);
+    r.handled = !!store.handled[r.id];
+    r.bannedUntil = (bans.get(r.reportedIp) || 0) > now() ? bans.get(r.reportedIp) : null;
+    r.reportsAgainst = (reportsAgainst.get(r.reportedIp) || []).filter((x) => x.ts > now() - BAN_MS).length;
+    out.push(r);
   }
   return out;
 }
@@ -485,7 +473,7 @@ async function handleAdmin(req, res, u) {
       online: [...players.values()].filter((p) => p.ws && !p.ws.closed).length,
       waiting: queue.size, pairs: pairs.size,
       bans: [...bans.values()].filter((v) => v > now()).length,
-      reportsToday, uptimeSec: Math.round(process.uptime()),
+      reportsToday, uptimeSec: Math.round(process.uptime()), storage: store.status(),
     });
   }
   if (route === 'GET /admin/api/reports') {
@@ -508,8 +496,8 @@ async function handleAdmin(req, res, u) {
       return json(res, 200, { ok: true });
     }
     if (u.pathname === '/admin/api/handled' && typeof body.id === 'string' && body.id.length < 40) {
-      if (body.handled) handled[body.id] = now(); else delete handled[body.id];
-      fs.writeFile(HANDLED_FILE, JSON.stringify(handled), () => {});
+      if (body.handled) store.handled[body.id] = now(); else delete store.handled[body.id];
+      store.saveHandled();
       return json(res, 200, { ok: true });
     }
   }
@@ -544,10 +532,12 @@ server.on('upgrade', (req, socket) => {
 });
 
 if (require.main === module) {
-  server.listen(PORT, HOST, () => {
+  storeReady.then(() => server.listen(PORT, HOST, () => {
     console.log(`ふたりミッション server: http://localhost:${PORT}`);
     if (!process.env.HASH_SALT) console.warn('⚠️  HASH_SALT が未設定です。再起動のたびに利用停止の記録が引き継がれなくなります。');
-  });
+    const st = store.status();
+    console.log(st.mode === 'remote' ? `記録の保存先: レンタルサーバー（${st.loaded ? '接続OK' : '接続できていません。30秒ごとに再試行します: ' + st.lastError}）` : `記録の保存先: このサーバーのファイル（${DATA_DIR}）`);
+  }));
 }
 
-module.exports = { server, pruneReports, _state: { players, queue, pairs, rooms } };
+module.exports = { server, pruneReports, store, _state: { players, queue, pairs, rooms } };

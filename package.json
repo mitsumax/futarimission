@@ -7,7 +7,7 @@
   "engines": { "node": ">=18" },
   "scripts": {
     "start": "node server.js",
-    "test": "node test-unit.js && node test-protocol.js"
+    "test": "node test-unit.js && node test-protocol.js && node test-store.js"
   },
   "license": "UNLICENSED"
 }

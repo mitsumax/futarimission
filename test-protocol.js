@@ -319,15 +319,16 @@ async function t(name, fn) { await fn(); n++; console.log('  ✓', name); }
   });
 
   await t('reports older than 180 days are deleted automatically', async () => {
-    const fs = require('fs'), path = require('path');
-    const file = path.join(process.env.DATA_DIR, 'reports.jsonl');
-    const old = { id: 'old1', ts: new Date(Date.now() - 181 * 86400_000).toISOString(), log: [] };
-    const fresh = { id: 'new1', ts: new Date().toISOString(), log: [] };
-    const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-    fs.writeFileSync(file, before + JSON.stringify(old) + '\n' + JSON.stringify(fresh) + '\n');
-    assert.strictEqual(pruneReports(), 1);
-    const ids = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l).id);
+    const { store } = require('./server');
+    store.addReport({ id: 'old1', ts: new Date(Date.now() - 181 * 86400_000).toISOString(), log: [] });
+    store.addReport({ id: 'new1', ts: new Date().toISOString(), log: [] });
+    await sleep(100);
+    assert.ok(pruneReports() >= 1);
+    const ids = store.reports.map((r) => r.id);
     assert.ok(!ids.includes('old1') && ids.includes('new1'));
+    const fs = require('fs'), path = require('path');
+    const fileIds = fs.readFileSync(path.join(process.env.DATA_DIR, 'reports.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l).id);
+    assert.ok(!fileIds.includes('old1') && fileIds.includes('new1'));
   });
 
   console.log(`\n${n} protocol tests passed`);

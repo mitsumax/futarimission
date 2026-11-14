@@ -148,6 +148,12 @@ function renderStats(s) {
   const items = [["いま接続中", s.online], ["相手を探し中", s.waiting], ["遊んでいるペア", s.pairs], ["24時間の通報", s.reportsToday], ["利用停止中", s.bans],
     ["稼働時間", s.uptimeSec > 3600 ? Math.floor(s.uptimeSec / 3600) + "時間" : Math.floor(s.uptimeSec / 60) + "分"]];
   for (const [l, v] of items) t.append(el("div", { class: "tile" }, el("div", { class: "v" }, v), el("div", { class: "l" }, l)));
+  const st = s.storage || {};
+  const label = st.mode === "remote" ? "レンタルサーバー" : "このサーバーのファイル";
+  const okText = st.mode === "local" ? "（再起動で消える場合あり）" : st.ok ? "（接続OK）" : "（接続エラー・再試行中）";
+  const tile = el("div", { class: "tile" }, el("div", { class: "v", style: "font-size:16px" }, label), el("div", { class: "l" }, "記録の保存先" + okText + (st.pending ? `　未送信 ${st.pending}件` : "")));
+  if (st.mode === "remote" && !st.ok) { tile.style.borderColor = "var(--warn)"; tile.title = st.lastError || ""; }
+  t.append(tile);
 }
 
 function renderReports() {
